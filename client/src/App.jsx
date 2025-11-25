@@ -1,3 +1,7 @@
+import io from 'socket.io-client';
+// If we are on localhost, look at port 3000. If on web, use auto-detection.
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
+const socket = io(BACKEND_URL);
 import React, { useState, useEffect } from 'react';
 import { 
   Eye, Trophy, Play, Plus, Trash2, ShieldAlert, ArrowRight, X, 
