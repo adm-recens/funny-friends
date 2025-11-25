@@ -1,25 +1,38 @@
-import io from 'socket.io-client';
-// If we are on localhost, look at port 3000. If on web, use auto-detection.
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
-const socket = io(BACKEND_URL);
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
-  Eye, Trophy, Play, Plus, Trash2, ShieldAlert, ArrowRight, X, 
-  Edit3, BarChart3, History, Download, Gavel, ArrowLeft, User, Lock, Wifi
+  Eye, 
+  EyeOff, 
+  Trophy, 
+  Play, 
+  Plus, 
+  Trash2, 
+  ShieldAlert, 
+  ArrowRight, 
+  X, 
+  Edit3, 
+  BarChart3, 
+  History,
+  Download,
+  Gavel,
+  ArrowLeft,
+  User,
+  Lock,
+  Wifi,
+  HelpCircle,
+  Info
 } from 'lucide-react';
 
-// --- MOCK AUTH SYSTEM FOR DEMONSTRATION ---
+// --- MOCK AUTH SYSTEM ---
 const MOCK_USERS = [
   { username: 'admin', role: 'OPERATOR', label: 'Table Operator' },
   { username: 'viewer', role: 'VIEWER', label: 'Live Audience' }
 ];
 
 const TeenPattiApp = () => {
-  // --- AUTH STATE ---
+  // --- STATE MANAGEMENT ---
   const [user, setUser] = useState(null); // { username, role }
-
-  // --- APP STATE ---
   const [view, setView] = useState('SETUP'); 
+  
   const [players, setPlayers] = useState([
     { id: 1, name: '', sessionBalance: 0 },
     { id: 2, name: '', sessionBalance: 0 }
@@ -54,9 +67,8 @@ const TeenPattiApp = () => {
     const foundUser = MOCK_USERS.find(u => u.username === username);
     if (foundUser) {
       setUser(foundUser);
-      // If viewer, go straight to game if active, or summary
       if (foundUser.role === 'VIEWER') {
-         setView('GAME'); // In real app, this would fetch current live state
+         setView('GAME'); 
       }
     } else {
       alert("Invalid user. Use 'admin' or 'viewer'");
@@ -68,7 +80,7 @@ const TeenPattiApp = () => {
     setView('SETUP');
   };
 
-  // --- CORE GAME LOGIC (Only executable by OPERATOR) ---
+  // --- CORE GAME LOGIC ---
 
   const getNextActiveIndex = (startIndex, playerList = gamePlayers) => {
     let nextIndex = (startIndex + 1) % playerList.length;
@@ -162,6 +174,8 @@ const TeenPattiApp = () => {
     setView('GAME');
   };
 
+  // --- SIDE/FORCE SHOW ---
+
   const openSideShowSelection = () => {
     const cost = currentStake; 
     const newPlayers = [...gamePlayers];
@@ -224,6 +238,8 @@ const TeenPattiApp = () => {
     const winner = gamePlayers.find(p => p.id === winnerId);
     endGame(winner, gamePlayers);
   };
+
+  // --- GAME END ---
 
   const endGame = (winner, finalGamePlayersState) => {
     const winMsg = createLogMsg(`*** WINNER: ${winner.name} (Pot: ${pot}) ***`);
@@ -301,8 +317,7 @@ const TeenPattiApp = () => {
     document.body.removeChild(link);
   };
 
-  // --- RENDER HELPERS ---
-  
+  // --- HELPERS ---
   const canSideShow = () => {
     if (activePlayerIndex === null) return false;
     const active = gamePlayers[activePlayerIndex];
@@ -320,11 +335,16 @@ const TeenPattiApp = () => {
     return opponents.every(p => p.status === 'BLIND');
   };
 
-  // --- VIEWS ---
+  // --- VIEW COMPONENTS ---
 
   const renderLogin = () => (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-sm rounded-2xl p-8 shadow-2xl">
+      <div className="bg-white w-full max-w-sm rounded-2xl p-8 shadow-2xl relative">
+        {/* Help Icon in Login */}
+        <button onClick={() => setView('HELP')} className="absolute top-4 right-4 text-slate-400 hover:text-blue-600">
+          <HelpCircle size={24} />
+        </button>
+
         <div className="text-center mb-8">
            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
              <Lock size={32} className="text-blue-600"/>
@@ -354,7 +374,10 @@ const TeenPattiApp = () => {
   const renderSetup = () => {
     if (user.role !== 'OPERATOR') {
        return (
-         <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 text-center">
+         <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 text-center relative">
+            <button onClick={() => setView('HELP')} className="absolute top-4 right-4 text-slate-400 hover:text-blue-600">
+              <HelpCircle size={28} />
+            </button>
             <Wifi size={48} className="text-slate-300 mb-4 animate-pulse"/>
             <h2 className="text-xl font-bold text-slate-700">Waiting for Operator</h2>
             <p className="text-slate-500">The game has not started yet.</p>
@@ -367,9 +390,14 @@ const TeenPattiApp = () => {
       <div className="min-h-screen bg-slate-50 p-4 max-w-md mx-auto">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-black text-slate-800">Teen Patti Ledger</h1>
-          <button onClick={() => setShowLeaderboard(true)} className="p-2 bg-white rounded-lg shadow-sm border text-blue-600">
-            <BarChart3 size={24} />
-          </button>
+          <div className="flex gap-2">
+            <button onClick={() => setView('HELP')} className="p-2 bg-white rounded-lg shadow-sm border text-slate-500 hover:text-blue-600">
+              <HelpCircle size={24} />
+            </button>
+            <button onClick={() => setShowLeaderboard(true)} className="p-2 bg-white rounded-lg shadow-sm border text-blue-600">
+              <BarChart3 size={24} />
+            </button>
+          </div>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border p-4 mb-4">
@@ -436,6 +464,7 @@ const TeenPattiApp = () => {
                <p className="text-4xl font-bold">{pot}</p>
              </div>
              <div className="flex gap-2">
+               <button onClick={() => setView('HELP')} className="p-2 bg-slate-800 rounded-full hover:bg-slate-700"><HelpCircle size={20}/></button>
                <button onClick={() => setShowLeaderboard(true)} className="p-2 bg-slate-800 rounded-full hover:bg-slate-700"><BarChart3 size={20}/></button>
                <button onClick={() => setView('LOGS')} className="p-2 bg-slate-800 rounded-full hover:bg-slate-700"><History size={20}/></button>
                {isViewer && <button onClick={handleLogout} className="p-2 bg-red-900 rounded-full hover:bg-red-800"><X size={20}/></button>}
@@ -474,7 +503,6 @@ const TeenPattiApp = () => {
           })}
         </div>
 
-        {/* CONTROLS AREA - HIDDEN FOR VIEWERS */}
         {isViewer ? (
            <div className="bg-white border-t p-6 shadow-[0_-5px_20px_-5px_rgba(0,0,0,0.1)] z-20 text-center">
              <p className="font-bold text-slate-500 animate-pulse">Waiting for Operator...</p>
@@ -545,6 +573,43 @@ const TeenPattiApp = () => {
     );
   };
 
+  const renderHelp = () => (
+    <div className="fixed inset-0 bg-slate-100 z-[70] flex flex-col">
+      <div className="bg-white p-4 shadow-sm flex items-center gap-3">
+        <button onClick={() => setView(user ? (user.role === 'VIEWER' && view === 'SETUP' ? 'SETUP' : 'GAME') : 'SETUP')} className="p-2 hover:bg-slate-100 rounded-full">
+          <ArrowLeft size={24} />
+        </button>
+        <h2 className="font-bold text-lg">Hand Strength Rules</h2>
+      </div>
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="bg-white p-4 rounded-xl border-l-4 border-blue-600 shadow-sm">
+          <h3 className="font-bold text-lg mb-1 text-blue-800">1. Trail (Set / Trio)</h3>
+          <p className="text-sm text-slate-600">Three cards of the same rank. <br/><strong>Highest: A-A-A</strong> | Lowest: 2-2-2</p>
+        </div>
+        <div className="bg-white p-4 rounded-xl border-l-4 border-green-600 shadow-sm">
+          <h3 className="font-bold text-lg mb-1 text-green-800">2. Pure Sequence (Straight Flush)</h3>
+          <p className="text-sm text-slate-600">Three consecutive cards of same suit. <br/><strong>Highest: A-K-Q</strong> | Lowest: 4-3-2</p>
+        </div>
+        <div className="bg-white p-4 rounded-xl border-l-4 border-yellow-500 shadow-sm">
+          <h3 className="font-bold text-lg mb-1 text-yellow-800">3. Sequence (Straight)</h3>
+          <p className="text-sm text-slate-600">Three consecutive cards, different suits. <br/><strong>Highest: A-K-Q</strong> | Lowest: 4-3-2</p>
+        </div>
+        <div className="bg-white p-4 rounded-xl border-l-4 border-purple-500 shadow-sm">
+          <h3 className="font-bold text-lg mb-1 text-purple-800">4. Color (Flush)</h3>
+          <p className="text-sm text-slate-600">Three cards of same suit, not consecutive. <br/><strong>Highest: A-K-J</strong></p>
+        </div>
+        <div className="bg-white p-4 rounded-xl border-l-4 border-orange-500 shadow-sm">
+          <h3 className="font-bold text-lg mb-1 text-orange-800">5. Pair (Double)</h3>
+          <p className="text-sm text-slate-600">Two cards of same rank. <br/><strong>Highest: A-A-K</strong></p>
+        </div>
+        <div className="bg-white p-4 rounded-xl border-l-4 border-slate-400 shadow-sm">
+          <h3 className="font-bold text-lg mb-1 text-slate-700">6. High Card</h3>
+          <p className="text-sm text-slate-600">Highest card wins if no other combo. <br/><strong>Highest: A</strong></p>
+        </div>
+      </div>
+    </div>
+  );
+
   const renderCustomBid = () => (
     <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-6">
       <div className="bg-white w-full max-w-sm rounded-2xl p-6">
@@ -577,7 +642,9 @@ const TeenPattiApp = () => {
     <div>
        {showLeaderboard && <LeaderboardModal sortedPlayers={[...players].filter(p=>p.name).sort((a,b) => b.sessionBalance - a.sessionBalance)} onClose={() => setShowLeaderboard(false)} onExport={exportToCSV} />}
        
-       {!user && renderLogin()}
+       {!user && view !== 'HELP' && renderLogin()}
+       
+       {view === 'HELP' && renderHelp()}
        {user && view === 'SETUP' && renderSetup()}
        {user && view === 'GAME' && renderGame()}
        {user && view === 'CUSTOM_BID' && renderCustomBid()}
@@ -671,7 +738,6 @@ const TeenPattiApp = () => {
           </div>
           
           <div className="w-full max-w-md space-y-3">
-            {/* Viewers don't see Deal Next Game button */}
             {user.role === 'OPERATOR' && (
               <button onClick={startGame} className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg">
                 <Play size={20} fill="currentColor"/> Deal Game #{gameCount}
@@ -716,7 +782,6 @@ const TeenPattiApp = () => {
   );
 };
 
-// Extracted Component
 const LeaderboardModal = ({ sortedPlayers, onClose, onExport }) => (
   <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
     <div className="bg-white w-full max-w-md rounded-2xl max-h-[80vh] flex flex-col shadow-2xl">
