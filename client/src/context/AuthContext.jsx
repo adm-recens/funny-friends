@@ -16,11 +16,22 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Check for existing session on mount (optional, if backend supports /me endpoint)
-        // For now, we'll rely on the user manually logging in or the session persisting via cookies if we implemented a check.
-        // Since we don't have a /me endpoint yet, we'll start with null.
-        // TODO: Implement /api/auth/me to persist session on refresh
-        setLoading(false);
+        // Check for existing session on mount
+        const checkSession = async () => {
+            try {
+                const res = await fetch(`${API_URL}/api/auth/me`, { credentials: 'include' });
+                const data = await res.json();
+                if (data.user) {
+                    setUser(data.user);
+                    socket.connect();
+                }
+            } catch (e) {
+                console.error("Session check failed", e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        checkSession();
     }, []);
 
     const login = async (username, password) => {
