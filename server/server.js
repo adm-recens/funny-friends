@@ -13,9 +13,22 @@ const prisma = new PrismaClient();
 
 // ALLOW CONNECTION FROM ANYWHERE (For simplicity)
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
+const ALLOWED_ORIGINS = [
+  CLIENT_URL,
+  "https://teen-patti-client.onrender.com",
+  "http://localhost:5173"
+];
 
 app.use(cors({
-  origin: CLIENT_URL,
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (ALLOWED_ORIGINS.includes(origin) || origin.endsWith('.onrender.com')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
 app.use(express.json());
