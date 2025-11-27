@@ -27,7 +27,7 @@ const Welcome = () => {
                             <Trophy size={24} className="text-white -rotate-3" />
                         </div>
                         <h1 className="text-3xl font-black text-white tracking-tight">
-                            Teen <span className="text-transparent bg-clip-text bg-gradient-to-r from-gold-400 to-gold-200">Patti</span>
+                            Teen <span className="text-transparent bg-clip-text bg-gradient-to-r from-gold-400 to-gold-200">Patti</span> <span className="text-xs text-slate-500 ml-2">v2.0</span>
                         </h1>
                     </div>
                     {/* Admin Entry Point */}
