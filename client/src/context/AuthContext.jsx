@@ -52,7 +52,7 @@ export const AuthProvider = ({ children }) => {
             if (data.success) {
                 setUser(data.user);
                 socket.connect();
-                return { success: true };
+                return { success: true, user: data.user };
             } else {
                 return { success: false, error: data.error };
             }
