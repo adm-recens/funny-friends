@@ -86,6 +86,9 @@ const AdminDashboard = () => {
                         <h1 className="text-3xl font-black text-slate-900">{isAdmin ? 'Admin Dashboard' : 'Operator Dashboard'}</h1>
                     </div>
                     <div className="flex gap-4">
+                        <button onClick={() => navigate('/setup')} className="bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-2 rounded-xl transition-colors shadow-lg shadow-green-500/30">
+                            Start New Game
+                        </button>
                         {isAdmin && (
                             <button onClick={() => setShowCreateUser(!showCreateUser)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-xl transition-colors">
                                 {showCreateUser ? 'Cancel' : 'Create User'}
