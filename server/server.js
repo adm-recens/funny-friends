@@ -197,7 +197,46 @@ app.get('/api/admin/users', async (req, res) => {
   res.json(users);
 });
 
-// 4. SESSION API
+app.post('/api/admin/users', async (req, res) => {
+  const { username, password, role } = req.body;
+  try {
+    const hashed = bcrypt.hashSync(password, 10);
+    const user = await prisma.user.create({
+      data: { username, password: hashed, role }
+    });
+    res.json({ success: true, user: { id: user.id, username: user.username } });
+  } catch (e) {
+    res.status(400).json({ error: "User likely exists" });
+  }
+});
+
+app.post('/api/admin/sessions/:name/end', async (req, res) => {
+  const { name } = req.params;
+  try {
+    const session = await prisma.gameSession.findUnique({ where: { name } });
+    if (!session) return res.status(404).json({ error: "Session not found" });
+
+    await prisma.gameSession.update({
+      where: { id: session.id },
+      data: { isActive: false }
+    });
+
+    // Clean up memory if exists
+    if (activeSessions.has(name)) {
+      activeSessions.delete(name);
+    }
+
+    // Broadcast end
+    io.to(name).emit('session_ended', { reason: 'ADMIN_ENDED' });
+
+    res.json({ success: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Failed to end session" });
+  }
+});
+
+
 app.post('/api/sessions', async (req, res) => {
   const { name, totalRounds } = req.body;
 
@@ -332,11 +371,12 @@ io.on('connection', (socket) => {
   socket.on('end_session', async ({ sessionName }) => {
     if (socket.user.role !== 'OPERATOR') return; // BLOCK UNAUTHORIZED
 
-    const session = activeSessions.get(sessionName);
+    // Robust check: Check DB even if not in memory
+    const session = await prisma.gameSession.findUnique({ where: { name: sessionName } });
+
     if (session) {
-      // Update DB to inactive
       await prisma.gameSession.update({
-        where: { id: session.sessionId },
+        where: { id: session.id },
         data: { isActive: false }
       });
       activeSessions.delete(sessionName);

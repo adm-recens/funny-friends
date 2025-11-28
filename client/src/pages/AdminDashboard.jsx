@@ -21,6 +21,62 @@ const AdminDashboard = () => {
             .then(data => setAdminUsers(data));
     }, []);
 
+    const [newUser, setNewUser] = useState({ username: '', password: '', role: 'USER' });
+    const [showCreateUser, setShowCreateUser] = useState(false);
+
+    const handleCreateUser = async (e) => {
+        e.preventDefault();
+        try {
+            const res = await fetch(`${API_URL}/api/admin/users`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newUser),
+                credentials: 'include'
+            });
+            if (res.ok) {
+                alert('User created successfully');
+                setShowCreateUser(false);
+                setNewUser({ username: '', password: '', role: 'USER' });
+                // Refresh list
+                fetch(`${API_URL}/api/admin/users`, { credentials: 'include' })
+                    .then(res => res.json())
+                    .then(data => setAdminUsers(data));
+            } else {
+                alert('Failed to create user');
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Error creating user');
+        }
+    };
+
+    const handleEndSession = async (sessionName) => {
+        if (!confirm(`Are you sure you want to force end session "${sessionName}"?`)) return;
+
+        // We need to use the socket to end it properly if it's live
+        // But since this is a dashboard, we might not be connected to the socket room.
+        // Let's use a REST API for force-ending, or just emit if we are connected.
+        // For robustness, let's add a REST endpoint for admins to end sessions.
+        try {
+            const res = await fetch(`${API_URL}/api/admin/sessions/${sessionName}/end`, {
+                method: 'POST',
+                credentials: 'include'
+            });
+            if (res.ok) {
+                alert('Session ended');
+                // Refresh
+                fetch(`${API_URL}/api/admin/sessions`, { credentials: 'include' })
+                    .then(res => res.json())
+                    .then(data => setAdminSessions(data));
+            } else {
+                alert('Failed to end session');
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Error ending session');
+        }
+    };
+
     return (
         <div className="min-h-screen bg-slate-50 p-8">
             <div className="max-w-6xl mx-auto">
@@ -29,8 +85,53 @@ const AdminDashboard = () => {
                         <button onClick={() => navigate('/')} className="p-2 bg-white rounded-xl shadow-sm border hover:bg-slate-50"><ArrowLeft /></button>
                         <h1 className="text-3xl font-black text-slate-900">Admin Dashboard</h1>
                     </div>
-                    <button onClick={() => { logout(); navigate('/'); }} className="text-red-500 font-bold hover:bg-red-50 px-4 py-2 rounded-xl transition-colors">Logout</button>
+                    <div className="flex gap-4">
+                        <button onClick={() => setShowCreateUser(!showCreateUser)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-xl transition-colors">
+                            {showCreateUser ? 'Cancel' : 'Create User'}
+                        </button>
+                        <button onClick={() => { logout(); navigate('/'); }} className="text-red-500 font-bold hover:bg-red-50 px-4 py-2 rounded-xl transition-colors">Logout</button>
+                    </div>
                 </div>
+
+                {showCreateUser && (
+                    <div className="bg-white p-6 rounded-2xl shadow-lg border border-blue-100 mb-8 animate-in fade-in slide-in-from-top-4">
+                        <h3 className="font-bold text-lg mb-4">Create New User</h3>
+                        <form onSubmit={handleCreateUser} className="flex gap-4 items-end">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 mb-1">Username</label>
+                                <input
+                                    type="text"
+                                    value={newUser.username}
+                                    onChange={e => setNewUser({ ...newUser, username: e.target.value })}
+                                    className="border rounded-lg px-3 py-2 w-48"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 mb-1">Password</label>
+                                <input
+                                    type="text"
+                                    value={newUser.password}
+                                    onChange={e => setNewUser({ ...newUser, password: e.target.value })}
+                                    className="border rounded-lg px-3 py-2 w-48"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 mb-1">Role</label>
+                                <select
+                                    value={newUser.role}
+                                    onChange={e => setNewUser({ ...newUser, role: e.target.value })}
+                                    className="border rounded-lg px-3 py-2 w-32"
+                                >
+                                    <option value="USER">User</option>
+                                    <option value="OPERATOR">Operator</option>
+                                </select>
+                            </div>
+                            <button type="submit" className="bg-green-600 text-white font-bold px-6 py-2 rounded-lg hover:bg-green-700">Save</button>
+                        </form>
+                    </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
@@ -63,11 +164,18 @@ const AdminDashboard = () => {
                                         <p className="font-bold text-slate-800">{session.name}</p>
                                         <p className="text-xs text-slate-400">{new Date(session.createdAt).toLocaleString()}</p>
                                     </div>
-                                    <div className="text-right">
+                                    <div className="text-right flex items-center gap-4">
                                         <span className={`px-2 py-1 rounded-full text-xs font-bold ${session.isActive ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-500'}`}>
                                             {session.isActive ? 'Active' : 'Ended'}
                                         </span>
-                                        <p className="text-xs text-slate-400 mt-1">{session._count?.hands || 0} Hands</p>
+                                        {session.isActive && (
+                                            <button
+                                                onClick={() => handleEndSession(session.name)}
+                                                className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded hover:bg-red-200 font-bold"
+                                            >
+                                                End Game
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             ))}
