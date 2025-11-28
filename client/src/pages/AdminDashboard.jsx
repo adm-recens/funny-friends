@@ -83,7 +83,7 @@ const AdminDashboard = () => {
                 <div className="flex items-center justify-between mb-8">
                     <div className="flex items-center gap-4">
                         <button onClick={() => navigate('/')} className="p-2 bg-white rounded-xl shadow-sm border hover:bg-slate-50"><ArrowLeft /></button>
-                        <h1 className="text-3xl font-black text-slate-900">Admin Dashboard</h1>
+                        <h1 className="text-3xl font-black text-slate-900">{isAdmin ? 'Admin Dashboard' : 'Operator Dashboard'}</h1>
                     </div>
                     <div className="flex gap-4">
                         {isAdmin && (
@@ -143,17 +143,19 @@ const AdminDashboard = () => {
                             Online
                         </div>
                     </div>
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                        <h3 className="font-bold text-slate-500 uppercase tracking-wider text-sm mb-4">Total Users</h3>
-                        <p className="text-3xl font-black text-slate-900">{adminUsers.length}</p>
-                    </div>
+                    {isAdmin && (
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                            <h3 className="font-bold text-slate-500 uppercase tracking-wider text-sm mb-4">Total Users</h3>
+                            <p className="text-3xl font-black text-slate-900">{adminUsers.length}</p>
+                        </div>
+                    )}
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
                         <h3 className="font-bold text-slate-500 uppercase tracking-wider text-sm mb-4">Total Sessions</h3>
                         <p className="text-3xl font-black text-slate-900">{adminSessions.length}</p>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className={`grid grid-cols-1 ${isAdmin ? 'lg:grid-cols-2' : 'lg:grid-cols-1'} gap-8`}>
                     {/* Recent Sessions */}
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
                         <div className="p-6 border-b border-slate-100">
@@ -184,28 +186,30 @@ const AdminDashboard = () => {
                         </div>
                     </div>
 
-                    {/* Users List */}
-                    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                        <div className="p-6 border-b border-slate-100">
-                            <h3 className="font-bold text-lg text-slate-900">Registered Users</h3>
-                        </div>
-                        <div className="max-h-96 overflow-y-auto">
-                            {adminUsers.map(u => (
-                                <div key={u.id} className="p-4 border-b border-slate-50 hover:bg-slate-50 flex justify-between items-center">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-xs">
-                                            {u.username[0].toUpperCase()}
+                    {/* Users List - ADMIN ONLY */}
+                    {isAdmin && (
+                        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                            <div className="p-6 border-b border-slate-100">
+                                <h3 className="font-bold text-lg text-slate-900">Registered Users</h3>
+                            </div>
+                            <div className="max-h-96 overflow-y-auto">
+                                {adminUsers.map(u => (
+                                    <div key={u.id} className="p-4 border-b border-slate-50 hover:bg-slate-50 flex justify-between items-center">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-xs">
+                                                {u.username[0].toUpperCase()}
+                                            </div>
+                                            <div>
+                                                <p className="font-bold text-slate-800">{u.username}</p>
+                                                <p className="text-xs text-slate-400">{u.role}</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <p className="font-bold text-slate-800">{u.username}</p>
-                                            <p className="text-xs text-slate-400">{u.role}</p>
-                                        </div>
+                                        <p className="text-xs text-slate-400">{new Date(u.createdAt).toLocaleDateString()}</p>
                                     </div>
-                                    <p className="text-xs text-slate-400">{new Date(u.createdAt).toLocaleDateString()}</p>
-                                </div>
-                            ))}
+                                ))}
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
             </div>
         </div>
