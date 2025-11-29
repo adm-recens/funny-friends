@@ -69,7 +69,7 @@ app.post('/api/auth/login', async (req, res) => {
       const hashed = bcrypt.hashSync('admin123', 10);
       const admin = await prisma.user.create({ data: { username: 'admin', password: hashed, role: 'ADMIN' } });
       const token = jwt.sign({ id: admin.id, role: admin.role }, SECRET);
-      const isProduction = process.env.NODE_ENV === 'production';
+      const isProduction = process.env.NODE_ENV === 'production' || (process.env.CLIENT_URL && process.env.CLIENT_URL.includes('onrender'));
       res.cookie('token', token, {
         httpOnly: true,
         secure: isProduction,
@@ -88,7 +88,7 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
   const token = jwt.sign({ id: user.id, role: user.role }, SECRET);
-  const isProduction = process.env.NODE_ENV === 'production';
+  const isProduction = process.env.NODE_ENV === 'production' || (process.env.CLIENT_URL && process.env.CLIENT_URL.includes('onrender'));
 
   res.cookie('token', token, {
     httpOnly: true,
