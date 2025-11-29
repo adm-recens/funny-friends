@@ -28,11 +28,17 @@ const AdminDashboard = () => {
         }
     }, [isAdmin]);
 
-    const [newUser, setNewUser] = useState({ username: '', password: '', role: 'USER' });
+    const [newUser, setNewUser] = useState({ username: '', password: '', role: '' });
     const [showCreateUser, setShowCreateUser] = useState(false);
 
     const handleCreateUser = async (e) => {
         e.preventDefault();
+
+        if (!newUser.role) {
+            alert("Please select a user role.");
+            return;
+        }
+
         console.log("--- [DEBUG] Client: Creating User ---");
         console.log("Target URL:", `${API_URL}/api/admin/users`);
         console.log("Payload:", newUser);
@@ -55,7 +61,7 @@ const AdminDashboard = () => {
             if (res.ok) {
                 alert('User created successfully');
                 setShowCreateUser(false);
-                setNewUser({ username: '', password: '', role: 'USER' });
+                setNewUser({ username: '', password: '', role: '' });
                 // Refresh list
                 fetch(`${API_URL}/api/admin/users`, { credentials: 'include', headers })
                     .then(res => res.json())
@@ -170,7 +176,9 @@ const AdminDashboard = () => {
                                     value={newUser.role}
                                     onChange={e => setNewUser({ ...newUser, role: e.target.value })}
                                     className="border rounded-lg px-3 py-2 w-32"
+                                    required
                                 >
+                                    <option value="" disabled>Select Role</option>
                                     <option value="PLAYER">Player</option>
                                     <option value="OPERATOR">Operator</option>
                                     <option value="ADMIN">Admin</option>
