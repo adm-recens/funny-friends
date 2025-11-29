@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Eye, LogOut, Play, Trash2, User, Check, X, ShieldAlert, Edit3 } from 'lucide-react';
+import { Eye, LogOut, Play, Trash2, User, Check, X, ShieldAlert, Edit3, Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const API_URL = import.meta.env.VITE_BACKEND_URL || 'https://teen-patti-app.onrender.com';
