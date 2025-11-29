@@ -198,7 +198,7 @@ app.post('/api/games/hand', async (req, res) => {
     }
 
     // Broadcast update
-    io.to(sessionName).emit('game_update', { type: 'HAND_COMPLETE', winner, pot, currentRound: updatedSession.currentRound });
+    io.to(sessionName).emit('game_update', { type: 'HAND_COMPLETE', winner, pot, netChanges, currentRound: updatedSession.currentRound });
     res.json({ success: true, currentRound: updatedSession.currentRound });
 
   } catch (e) {

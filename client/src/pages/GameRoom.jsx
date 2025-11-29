@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Eye, LogOut, Play, Trash2, User, Check, X, ShieldAlert, Edit3, Plus } from 'lucide-react';
+import { Eye, LogOut, Play, Trash2, User, Check, X, ShieldAlert, Edit3, Plus, Trophy } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const API_URL = import.meta.env.VITE_BACKEND_URL || 'https://teen-patti-app.onrender.com';
@@ -27,9 +27,10 @@ const GameRoom = () => {
 
     // Modals
     const [showLeaderboard, setShowLeaderboard] = useState(false);
-    const [sideShowData, setSideShowData] = useState({ requester: null, target: null });
-    const [forceShowData, setForceShowData] = useState({ activePlayer: null, opponents: [] });
-    const [view, setView] = useState('GAME'); // Sub-views: GAME, SIDESHOW_SELECT, etc.
+    const [showRoundSummary, setShowRoundSummary] = useState(false);
+    const [showSessionSummary, setShowSessionSummary] = useState(false);
+    const [roundSummaryData, setRoundSummaryData] = useState(null);
+    const [sessionSummaryData, setSessionSummaryData] = useState(null);
 
     // --- SOCKET & SYNC ---
     useEffect(() => {
@@ -37,14 +38,18 @@ const GameRoom = () => {
 
         if (user?.role === 'OPERATOR') {
             socket.emit('join_session', { sessionName, role: 'OPERATOR' });
-        } else {
-            // Viewer logic handled in Request Access UI
         }
 
         socket.on('game_update', (serverState) => {
             if (serverState) {
                 if (serverState.type === 'HAND_COMPLETE') {
-                    // Handled separately
+                    setRoundSummaryData({
+                        winner: serverState.winner,
+                        pot: serverState.pot,
+                        netChanges: serverState.netChanges,
+                        currentRound: serverState.currentRound
+                    });
+                    setShowRoundSummary(true);
                 } else {
                     restoreState(serverState);
                 }
@@ -70,8 +75,13 @@ const GameRoom = () => {
         });
 
         socket.on('session_ended', ({ reason }) => {
-            alert(`Session Ended: ${reason}`);
-            navigate('/');
+            if (reason === 'MAX_ROUNDS_REACHED' || reason === 'ADMIN_ENDED') {
+                setSessionSummaryData({ reason });
+                setShowSessionSummary(true);
+            } else {
+                alert(`Session Ended: ${reason}`);
+                navigate('/');
+            }
         });
 
         return () => {
@@ -102,7 +112,6 @@ const GameRoom = () => {
     }, [players, currentRound, totalRounds, gamePlayers, pot, currentStake, activePlayerIndex, currentLogs, user, sessionName, socket]);
 
     const restoreState = (state) => {
-        // Sort players by seat if available
         let sortedPlayers = state.players || [];
         if (sortedPlayers.length > 0 && sortedPlayers[0].seat) {
             sortedPlayers.sort((a, b) => (a.seat || 99) - (b.seat || 99));
@@ -136,6 +145,18 @@ const GameRoom = () => {
         }
     };
 
+    const handleLogout = () => {
+        logout();
+        navigate('/');
+    };
+
+    const nextRound = () => {
+        setShowRoundSummary(false);
+        setRoundSummaryData(null);
+        setCurrentRound(prev => prev + 1);
+        setGamePlayers([]);
+    };
+
     const startGame = () => {
         const validPlayers = players.filter(p => p.name.trim() !== '');
         if (validPlayers.length < 2) return alert("Need at least 2 players.");
@@ -154,7 +175,7 @@ const GameRoom = () => {
         setCurrentLogs([]);
     };
 
-    // --- GAME LOGIC HELPERS (Simplified for brevity, copy full logic from App.jsx) ---
+    // --- GAME LOGIC HELPERS ---
     const getNextActiveIndex = (startIndex, playerList = gamePlayers) => {
         let nextIndex = (startIndex + 1) % playerList.length;
         let loopCount = 0;
@@ -203,7 +224,6 @@ const GameRoom = () => {
     };
 
     const endGame = async (winner, finalGamePlayersState) => {
-        // Logic to save hand to server
         const netChanges = {};
         const updatedMasterList = players.map(p => {
             const gameP = finalGamePlayersState.find(gp => gp.id === p.id);
@@ -232,12 +252,16 @@ const GameRoom = () => {
                 }),
                 credentials: 'include'
             });
-            // Increment round locally for immediate feedback, server sync will confirm
-            setCurrentRound(prev => prev + 1);
-        } catch (e) { console.error(e); }
 
-        setPlayers(updatedMasterList);
-        setGamePlayers([]); // Reset for next round
+            setRoundSummaryData({
+                winner: { name: winner.name },
+                pot,
+                netChanges
+            });
+            setShowRoundSummary(true);
+
+            setPlayers(updatedMasterList);
+        } catch (e) { console.error(e); }
     };
 
     // --- RENDER ---
@@ -347,6 +371,38 @@ const GameRoom = () => {
                             </div>
                         </div>
                     )}
+
+                    {/* Round Summary Modal (Setup Phase) */}
+                    {showRoundSummary && roundSummaryData && (
+                        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                            <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in fade-in zoom-in duration-300">
+                                <div className="text-center mb-6">
+                                    <Trophy size={48} className="text-gold-500 mx-auto mb-4" />
+                                    <h2 className="text-3xl font-black text-slate-900 uppercase">Round Complete</h2>
+                                    <p className="text-slate-500 font-bold">Winner: <span className="text-blue-600">{roundSummaryData.winner.name}</span></p>
+                                    <p className="text-2xl font-black text-gold-500 mt-2">Pot: {roundSummaryData.pot}</p>
+                                </div>
+
+                                <div className="space-y-3 mb-8 max-h-60 overflow-y-auto">
+                                    {players.map(p => {
+                                        const change = roundSummaryData.netChanges ? roundSummaryData.netChanges[p.id] : 0;
+                                        return (
+                                            <div key={p.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                                <span className="font-bold text-slate-700">{p.name}</span>
+                                                <span className={`font-black ${change >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                                    {change >= 0 ? '+' : ''}{change}
+                                                </span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                <button onClick={nextRound} className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-blue-500/30 hover:bg-blue-700 transition-all">
+                                    Start Next Round
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         );
@@ -380,7 +436,7 @@ const GameRoom = () => {
                         </div>
                     </div>
                     <div className="flex gap-2">
-                        <button onClick={() => navigate('/')} className="p-3 bg-white/10 rounded-full hover:bg-white/20 transition-all text-slate-300 hover:text-white"><LogOut size={20} /></button>
+                        <button onClick={handleLogout} className="p-3 bg-white/10 rounded-full hover:bg-white/20 transition-all text-slate-300 hover:text-white"><LogOut size={20} /></button>
                     </div>
                 </div>
                 <div className="mt-4 flex justify-between items-center bg-black/30 p-3 rounded-xl border border-white/5 max-w-7xl mx-auto">
@@ -438,6 +494,77 @@ const GameRoom = () => {
                             <button onClick={() => handleBet(null, true)} className="py-4 bg-slate-800 text-green-400 border border-green-500/30 rounded-xl text-xs font-bold hover:bg-green-500/10 active:scale-95 transition-all uppercase tracking-wider">x2 Raise ({currentStake * 2})</button>
                             <button className="py-4 border rounded-xl text-xs font-bold uppercase tracking-wider transition-all active:scale-95 bg-slate-800 text-slate-600 border-slate-800 cursor-not-allowed"><Edit3 size={14} className="inline mr-2 mb-0.5" /> Custom Bid</button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Round Summary Modal (Active Game Phase) */}
+            {showRoundSummary && roundSummaryData && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in fade-in zoom-in duration-300">
+                        <div className="text-center mb-6">
+                            <Trophy size={48} className="text-gold-500 mx-auto mb-4" />
+                            <h2 className="text-3xl font-black text-slate-900 uppercase">Round Complete</h2>
+                            <p className="text-slate-500 font-bold">Winner: <span className="text-blue-600">{roundSummaryData.winner.name}</span></p>
+                            <p className="text-2xl font-black text-gold-500 mt-2">Pot: {roundSummaryData.pot}</p>
+                        </div>
+
+                        <div className="space-y-3 mb-8 max-h-60 overflow-y-auto">
+                            {players.map(p => {
+                                const change = roundSummaryData.netChanges ? roundSummaryData.netChanges[p.id] : 0;
+                                return (
+                                    <div key={p.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                        <span className="font-bold text-slate-700">{p.name}</span>
+                                        <span className={`font-black ${change >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                            {change >= 0 ? '+' : ''}{change}
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {user?.role === 'OPERATOR' ? (
+                            <button onClick={nextRound} className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-blue-500/30 hover:bg-blue-700 transition-all">
+                                Start Next Round
+                            </button>
+                        ) : (
+                            <p className="text-center text-slate-400 font-bold animate-pulse">Waiting for Operator...</p>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Session Summary Modal */}
+            {showSessionSummary && sessionSummaryData && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+                    <div className="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl animate-in fade-in zoom-in duration-300 border-4 border-gold-500">
+                        <div className="text-center mb-8">
+                            <div className="w-20 h-20 bg-gold-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <Trophy size={40} className="text-gold-600" />
+                            </div>
+                            <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tight">Game Over</h2>
+                            <p className="text-slate-500 font-bold mt-2">Final Standings</p>
+                        </div>
+
+                        <div className="space-y-3 mb-8">
+                            {[...players].sort((a, b) => b.sessionBalance - a.sessionBalance).map((p, idx) => (
+                                <div key={p.id} className={`flex justify-between items-center p-4 rounded-2xl border-2 ${idx === 0 ? 'bg-gold-50 border-gold-200' : 'bg-slate-50 border-slate-100'}`}>
+                                    <div className="flex items-center gap-4">
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black ${idx === 0 ? 'bg-gold-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                                            {idx + 1}
+                                        </div>
+                                        <span className={`font-bold text-lg ${idx === 0 ? 'text-slate-900' : 'text-slate-600'}`}>{p.name}</span>
+                                    </div>
+                                    <span className={`font-black text-xl ${p.sessionBalance >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                        {p.sessionBalance >= 0 ? '+' : ''}{p.sessionBalance}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+
+                        <button onClick={() => navigate('/')} className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold text-lg hover:bg-slate-800 transition-all">
+                            Return to Home
+                        </button>
                     </div>
                 </div>
             )}
