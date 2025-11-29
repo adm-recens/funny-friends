@@ -192,6 +192,9 @@ app.post('/api/games/hand', async (req, res) => {
         data: { isActive: false }
       });
       io.to(sessionName).emit('session_ended', { reason: 'MAX_ROUNDS_REACHED' });
+      if (activeSessions.has(sessionName)) {
+        activeSessions.delete(sessionName);
+      }
     }
 
     // Broadcast update
@@ -415,6 +418,7 @@ io.use((socket, next) => {
   const cookieHeader = socket.handshake.headers.cookie;
   let token = null;
 
+  // 1. Try to get token from cookies
   if (cookieHeader) {
     const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
       const [key, value] = cookie.trim().split('=');
@@ -422,6 +426,19 @@ io.use((socket, next) => {
       return acc;
     }, {});
     token = cookies.token;
+  }
+
+  // 2. Try to get token from socket auth (Client sends it here)
+  if (!token && socket.handshake.auth && socket.handshake.auth.token) {
+    token = socket.handshake.auth.token;
+  }
+
+  // 3. Try to get token from Authorization header
+  if (!token && socket.handshake.headers.authorization) {
+    const authHeader = socket.handshake.headers.authorization;
+    if (authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    }
   }
 
   if (token) {
@@ -451,12 +468,52 @@ io.on('connection', (socket) => {
     socket.join(sessionName);
 
     if (role === 'OPERATOR') {
-      const session = activeSessions.get(sessionName);
+      let session = activeSessions.get(sessionName);
+
+      // If not in memory, try to restore from DB
+      if (!session) {
+        try {
+          const dbSession = await prisma.gameSession.findUnique({ where: { name: sessionName } });
+          if (dbSession && dbSession.isActive) {
+            const dbPlayers = await prisma.player.findMany({ where: { sessionId: dbSession.id } });
+            const initialPlayers = dbPlayers.map(p => ({
+              id: p.id,
+              name: p.name,
+              sessionBalance: p.sessionBalance,
+              seat: p.seatPosition
+            }));
+
+            session = {
+              sessionId: dbSession.id,
+              totalRounds: dbSession.totalRounds,
+              currentRound: dbSession.currentRound,
+              gameState: {
+                players: initialPlayers,
+                gamePlayers: [],
+                pot: 0,
+                currentStake: 20,
+                activePlayerIndex: 0,
+                currentLogs: []
+              },
+              viewerRequests: new Map(),
+              approvedViewers: new Set()
+            };
+            activeSessions.set(sessionName, session);
+            console.log(`Restored session '${sessionName}' from DB.`);
+          }
+        } catch (e) {
+          console.error("Failed to restore session", e);
+        }
+      }
+
       if (session) {
         socket.emit('game_update', session.gameState);
         session.viewerRequests.forEach(req => {
           socket.emit('viewer_requested', req);
         });
+      } else {
+        // Session not found or ended
+        socket.emit('session_ended', { reason: "Session not found or ended" });
       }
     }
   });
