@@ -26,7 +26,6 @@ const GameRoom = () => {
     const [viewerRequests, setViewerRequests] = useState([]);
 
     // Modals
-    const [showLeaderboard, setShowLeaderboard] = useState(false);
     const [showRoundSummary, setShowRoundSummary] = useState(false);
     const [showSessionSummary, setShowSessionSummary] = useState(false);
     const [roundSummaryData, setRoundSummaryData] = useState(null);
@@ -209,7 +208,9 @@ const GameRoom = () => {
         const player = gamePlayers[activePlayerIndex];
         let newStakeValue = currentStake;
         if (amountOverride) {
-            if (amountOverride > currentStake) newStakeValue = parseInt(amountOverride);
+            const val = parseInt(amountOverride);
+            if (val >= currentStake) newStakeValue = val;
+            else return alert(`Bid must be at least ${currentStake}`);
         } else if (isDouble) {
             newStakeValue = currentStake * 2;
         }
@@ -221,6 +222,17 @@ const GameRoom = () => {
         setPot(prev => prev + costToPay);
         setCurrentStake(newStakeValue);
         setActivePlayerIndex(getNextActiveIndex(activePlayerIndex));
+    };
+
+    const handleCustomBid = () => {
+        const amount = prompt(`Enter custom bid amount (Minimum ${currentStake}):`, currentStake);
+        if (amount) {
+            handleBet(amount);
+        }
+    };
+
+    const handleSideShow = () => {
+        alert("Side Show: As the Operator, please manually compare the cards of the current and previous player, and fold the losing player.");
     };
 
     const endGame = async (winner, finalGamePlayersState) => {
@@ -328,7 +340,7 @@ const GameRoom = () => {
                             <p className="text-slate-500 font-medium">Session: {sessionName} (Round {currentRound}/{totalRounds})</p>
                         </div>
                         <div className="flex gap-3">
-                            <button onClick={closeSession} className="p-3 bg-red-50 text-red-500 rounded-xl shadow-sm border border-red-100 hover:bg-red-100 transition-all"><LogOut size={24} /></button>
+                            <button onClick={handleLogout} className="px-4 py-2 bg-red-50 text-red-500 rounded-xl shadow-sm border border-red-100 hover:bg-red-100 transition-all font-bold flex items-center gap-2"><LogOut size={18} /> Logout</button>
                         </div>
                     </div>
 
@@ -436,7 +448,7 @@ const GameRoom = () => {
                         </div>
                     </div>
                     <div className="flex gap-2">
-                        <button onClick={handleLogout} className="p-3 bg-white/10 rounded-full hover:bg-white/20 transition-all text-slate-300 hover:text-white"><LogOut size={20} /></button>
+                        <button onClick={handleLogout} className="px-4 py-2 bg-white/10 rounded-xl hover:bg-white/20 transition-all text-slate-300 hover:text-white font-bold flex items-center gap-2"><LogOut size={18} /> Logout</button>
                     </div>
                 </div>
                 <div className="mt-4 flex justify-between items-center bg-black/30 p-3 rounded-xl border border-white/5 max-w-7xl mx-auto">
@@ -487,12 +499,12 @@ const GameRoom = () => {
 
                         <div className="grid grid-cols-4 gap-3 h-28">
                             <button onClick={handleFold} disabled={isBlind} className={`flex flex-col items-center justify-center rounded-2xl border transition-all active:scale-95 ${isBlind ? 'bg-slate-800/50 text-slate-600 border-slate-800 cursor-not-allowed' : 'bg-red-500/10 text-red-500 border-red-500/30 hover:bg-red-500/20 hover:border-red-500/50'}`}><Trash2 size={24} className="mb-2" /><span className="text-xs font-black uppercase tracking-wider">Pack</span></button>
-                            <button className="flex flex-col items-center justify-center rounded-2xl border bg-slate-800/50 text-slate-600 border-slate-800 cursor-not-allowed"><ShieldAlert size={24} className="mb-2" /><span className="text-xs font-black uppercase tracking-wider">Side Show</span></button>
+                            <button onClick={handleSideShow} className="flex flex-col items-center justify-center rounded-2xl border bg-slate-800 text-blue-400 border-blue-500/30 hover:bg-blue-500/10 transition-all active:scale-95"><ShieldAlert size={24} className="mb-2" /><span className="text-xs font-black uppercase tracking-wider">Side Show</span></button>
                             <button onClick={() => handleBet(null, false)} className="col-span-2 bg-gradient-to-b from-blue-500 to-blue-700 text-white rounded-2xl flex flex-col items-center justify-center active:scale-95 transition-all shadow-lg shadow-blue-900/50 border-t border-blue-400 relative overflow-hidden group"><div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div><span className="text-3xl font-black tracking-tight relative z-10">{cost}</span><span className="text-[10px] font-bold opacity-80 tracking-[0.2em] uppercase relative z-10">Chaal</span></button>
                         </div>
                         <div className="grid grid-cols-2 gap-3 mt-3">
                             <button onClick={() => handleBet(null, true)} className="py-4 bg-slate-800 text-green-400 border border-green-500/30 rounded-xl text-xs font-bold hover:bg-green-500/10 active:scale-95 transition-all uppercase tracking-wider">x2 Raise ({currentStake * 2})</button>
-                            <button className="py-4 border rounded-xl text-xs font-bold uppercase tracking-wider transition-all active:scale-95 bg-slate-800 text-slate-600 border-slate-800 cursor-not-allowed"><Edit3 size={14} className="inline mr-2 mb-0.5" /> Custom Bid</button>
+                            <button onClick={handleCustomBid} className="py-4 border rounded-xl text-xs font-bold uppercase tracking-wider transition-all active:scale-95 bg-slate-800 text-yellow-400 border-yellow-500/30 hover:bg-yellow-500/10"><Edit3 size={14} className="inline mr-2 mb-0.5" /> Custom Bid</button>
                         </div>
                     </div>
                 </div>

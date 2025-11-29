@@ -20,21 +20,30 @@ export const AuthProvider = ({ children }) => {
         const checkSession = async () => {
             try {
                 const token = localStorage.getItem('token');
+                console.log("[Auth] Checking session. Token present:", !!token);
+
                 const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
 
                 const res = await fetch(`${API_URL}/api/auth/me`, {
                     credentials: 'include',
                     headers
                 });
+
+                console.log("[Auth] /api/auth/me status:", res.status);
+
                 const data = await res.json();
+                console.log("[Auth] /api/auth/me data:", data);
+
                 if (data.user) {
                     setUser(data.user);
                     // Update socket auth
                     socket.auth = { token };
                     socket.connect();
+                } else {
+                    console.warn("[Auth] No user returned from /me");
                 }
             } catch (e) {
-                console.error("Session check failed", e);
+                console.error("[Auth] Session check failed", e);
             } finally {
                 setLoading(false);
             }

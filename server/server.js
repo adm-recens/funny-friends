@@ -507,7 +507,11 @@ io.on('connection', (socket) => {
       }
 
       if (session) {
-        socket.emit('game_update', session.gameState);
+        socket.emit('game_update', {
+          ...session.gameState,
+          currentRound: session.currentRound,
+          totalRounds: session.totalRounds
+        });
         session.viewerRequests.forEach(req => {
           socket.emit('viewer_requested', req);
         });
