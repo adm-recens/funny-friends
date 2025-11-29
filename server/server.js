@@ -37,6 +37,14 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 
+// DEBUG MIDDLEWARE
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  console.log("Cookies:", req.cookies);
+  console.log("Origin:", req.headers.origin);
+  next();
+});
+
 const io = new Server(server, {
   cors: {
     origin: (origin, callback) => {
@@ -213,12 +221,22 @@ app.get('/api/admin/users', async (req, res) => {
 });
 
 app.post('/api/admin/users', async (req, res) => {
+  console.log("--- [DEBUG] Create User Request ---");
+  console.log("Headers:", JSON.stringify(req.headers));
+  console.log("Cookies:", req.cookies);
+
   const token = req.cookies.token;
-  if (!token) return res.status(401).json({ error: "Unauthorized" });
+  if (!token) {
+    console.log("[DEBUG] No token found in cookies");
+    return res.status(401).json({ error: "Unauthorized - No Token" });
+  }
 
   try {
     const decoded = jwt.verify(token, SECRET);
+    console.log("[DEBUG] Token Decoded:", decoded);
+
     if (decoded.role !== 'ADMIN') {
+      console.log("[DEBUG] Role mismatch:", decoded.role);
       return res.status(403).json({ error: "Only Admins can create users" });
     }
 
@@ -497,4 +515,9 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  console.log("NODE_ENV:", process.env.NODE_ENV);
+  console.log("CLIENT_URL:", process.env.CLIENT_URL);
+  console.log("Is Production Cookie Mode:", process.env.NODE_ENV === 'production' || (process.env.CLIENT_URL && process.env.CLIENT_URL.includes('onrender')));
+});

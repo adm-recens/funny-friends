@@ -30,6 +30,10 @@ const AdminDashboard = () => {
 
     const handleCreateUser = async (e) => {
         e.preventDefault();
+        console.log("--- [DEBUG] Client: Creating User ---");
+        console.log("Target URL:", `${API_URL}/api/admin/users`);
+        console.log("Payload:", newUser);
+
         try {
             const res = await fetch(`${API_URL}/api/admin/users`, {
                 method: 'POST',
@@ -37,6 +41,8 @@ const AdminDashboard = () => {
                 body: JSON.stringify(newUser),
                 credentials: 'include'
             });
+            console.log("Response Status:", res.status);
+            console.log("Response Headers:", [...res.headers.entries()]);
             if (res.ok) {
                 alert('User created successfully');
                 setShowCreateUser(false);
