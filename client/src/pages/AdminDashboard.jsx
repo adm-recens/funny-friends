@@ -14,12 +14,15 @@ const AdminDashboard = () => {
     const isAdmin = user?.role === 'ADMIN' || user?.username === 'ram54' || user?.username === 'admin';
 
     useEffect(() => {
-        fetch(`${API_URL}/api/admin/sessions`, { credentials: 'include' })
+        const token = localStorage.getItem('token');
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+        fetch(`${API_URL}/api/admin/sessions`, { credentials: 'include', headers })
             .then(res => res.json())
             .then(data => setAdminSessions(data));
 
         if (isAdmin) {
-            fetch(`${API_URL}/api/admin/users`, { credentials: 'include' })
+            fetch(`${API_URL}/api/admin/users`, { credentials: 'include', headers })
                 .then(res => res.json())
                 .then(data => setAdminUsers(data));
         }
@@ -34,10 +37,16 @@ const AdminDashboard = () => {
         console.log("Target URL:", `${API_URL}/api/admin/users`);
         console.log("Payload:", newUser);
 
+        const token = localStorage.getItem('token');
+        const headers = {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        };
+
         try {
             const res = await fetch(`${API_URL}/api/admin/users`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify(newUser),
                 credentials: 'include'
             });
@@ -48,7 +57,7 @@ const AdminDashboard = () => {
                 setShowCreateUser(false);
                 setNewUser({ username: '', password: '', role: 'USER' });
                 // Refresh list
-                fetch(`${API_URL}/api/admin/users`, { credentials: 'include' })
+                fetch(`${API_URL}/api/admin/users`, { credentials: 'include', headers })
                     .then(res => res.json())
                     .then(data => setAdminUsers(data));
             } else {
@@ -63,15 +72,19 @@ const AdminDashboard = () => {
     const handleEndSession = async (sessionName) => {
         if (!confirm(`Are you sure you want to force end session "${sessionName}"?`)) return;
 
+        const token = localStorage.getItem('token');
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
         try {
             const res = await fetch(`${API_URL}/api/admin/sessions/${sessionName}/end`, {
                 method: 'POST',
-                credentials: 'include'
+                credentials: 'include',
+                headers
             });
             if (res.ok) {
                 alert('Session ended');
                 // Refresh
-                fetch(`${API_URL}/api/admin/sessions`, { credentials: 'include' })
+                fetch(`${API_URL}/api/admin/sessions`, { credentials: 'include', headers })
                     .then(res => res.json())
                     .then(data => setAdminSessions(data));
             } else {
@@ -85,10 +98,14 @@ const AdminDashboard = () => {
 
     const handleDeleteUser = async (userId) => {
         if (!confirm("Are you sure you want to delete this user?")) return;
+        const token = localStorage.getItem('token');
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
         try {
             const res = await fetch(`${API_URL}/api/admin/users/${userId}`, {
                 method: 'DELETE',
-                credentials: 'include'
+                credentials: 'include',
+                headers
             });
             if (res.ok) {
                 alert('User deleted');
@@ -104,7 +121,6 @@ const AdminDashboard = () => {
 
     return (
         <div className="min-h-screen bg-slate-50 p-8">
-            {/* ... (Header and Stats remain same) ... */}
             <div className="max-w-6xl mx-auto">
                 <div className="flex items-center justify-between mb-8">
                     <div className="flex items-center gap-4">

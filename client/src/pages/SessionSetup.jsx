@@ -14,12 +14,17 @@ const SessionSetup = () => {
     const [seats, setSeats] = useState(Array(6).fill(null)); // 6 Seats
 
     useEffect(() => {
+        const token = localStorage.getItem('token');
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
         // Fetch available players (using admin users endpoint for now, filtering for PLAYER)
-        fetch(`${API_URL}/api/admin/users`, { credentials: 'include' })
+        fetch(`${API_URL}/api/admin/users`, { credentials: 'include', headers })
             .then(res => res.json())
             .then(data => {
-                const players = data.filter(u => u.role === 'PLAYER');
-                setAvailablePlayers(players);
+                if (Array.isArray(data)) {
+                    const players = data.filter(u => u.role === 'PLAYER');
+                    setAvailablePlayers(players);
+                }
             })
             .catch(err => console.error("Failed to fetch players", err));
     }, []);
@@ -43,10 +48,16 @@ const SessionSetup = () => {
             .map((player, index) => player ? { userId: player.id, name: player.username, seat: index + 1 } : null)
             .filter(p => p !== null);
 
+        const token = localStorage.getItem('token');
+        const headers = {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        };
+
         try {
             const res = await fetch(`${API_URL}/api/sessions`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({ name: sessionName, totalRounds, players: assignedPlayers }),
                 credentials: 'include'
             });

@@ -19,10 +19,18 @@ export const AuthProvider = ({ children }) => {
         // Check for existing session on mount
         const checkSession = async () => {
             try {
-                const res = await fetch(`${API_URL}/api/auth/me`, { credentials: 'include' });
+                const token = localStorage.getItem('token');
+                const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+                const res = await fetch(`${API_URL}/api/auth/me`, {
+                    credentials: 'include',
+                    headers
+                });
                 const data = await res.json();
                 if (data.user) {
                     setUser(data.user);
+                    // Update socket auth
+                    socket.auth = { token };
                     socket.connect();
                 }
             } catch (e) {
@@ -51,6 +59,10 @@ export const AuthProvider = ({ children }) => {
 
             if (data.success) {
                 setUser(data.user);
+                if (data.token) {
+                    localStorage.setItem('token', data.token);
+                    socket.auth = { token: data.token };
+                }
                 socket.connect();
                 return { success: true, user: data.user };
             } else {
@@ -71,6 +83,7 @@ export const AuthProvider = ({ children }) => {
             await fetch(`${API_URL}/api/auth/logout`, { method: 'POST', credentials: 'include' });
         } catch (e) { console.error(e); }
 
+        localStorage.removeItem('token');
         setUser(null);
         socket.disconnect();
     };

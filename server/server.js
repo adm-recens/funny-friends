@@ -66,6 +66,23 @@ app.get('/', (req, res) => {
   res.send('Teen Patti Ledger Backend is running!');
 });
 
+// Helper to get user from Token (Cookie or Header)
+const getUserFromRequest = (req) => {
+  let token = req.cookies.token;
+  if (!token && req.headers.authorization) {
+    const parts = req.headers.authorization.split(' ');
+    if (parts.length === 2 && parts[0] === 'Bearer') {
+      token = parts[1];
+    }
+  }
+  if (!token) return null;
+  try {
+    return jwt.verify(token, SECRET);
+  } catch (e) {
+    return null;
+  }
+};
+
 // 1. LOGIN API
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
@@ -105,22 +122,19 @@ app.post('/api/auth/login', async (req, res) => {
     maxAge: 24 * 60 * 60 * 1000
   });
 
-  res.json({ success: true, user: { username: user.username, role: user.role } });
+  res.json({ success: true, user: { username: user.username, role: user.role }, token }); // Return token for client-side storage
 });
 
 // 1.5 CHECK SESSION API (Persist Login)
 app.get('/api/auth/me', (req, res) => {
-  const token = req.cookies.token;
-  if (!token) return res.json({ user: null });
+  const decoded = getUserFromRequest(req);
+  if (!decoded) return res.json({ user: null });
 
-  jwt.verify(token, SECRET, (err, decoded) => {
-    if (err) return res.json({ user: null });
-    // Fetch fresh user data to ensure role is up to date
-    prisma.user.findUnique({ where: { id: decoded.id } }).then(user => {
-      if (!user) return res.json({ user: null });
-      res.json({ user: { id: user.id, role: user.role, username: user.username } });
-    }).catch(() => res.json({ user: null }));
-  });
+  // Fetch fresh user data to ensure role is up to date
+  prisma.user.findUnique({ where: { id: decoded.id } }).then(user => {
+    if (!user) return res.json({ user: null });
+    res.json({ user: { id: user.id, role: user.role, username: user.username } });
+  }).catch(() => res.json({ user: null }));
 });
 
 // LOGOUT API
@@ -223,16 +237,14 @@ app.get('/api/admin/users', async (req, res) => {
 app.post('/api/admin/users', async (req, res) => {
   console.log("--- [DEBUG] Create User Request ---");
   console.log("Headers:", JSON.stringify(req.headers));
-  console.log("Cookies:", req.cookies);
 
-  const token = req.cookies.token;
-  if (!token) {
-    console.log("[DEBUG] No token found in cookies");
-    return res.status(401).json({ error: "Unauthorized - No Token" });
+  const decoded = getUserFromRequest(req);
+  if (!decoded) {
+    console.log("[DEBUG] No valid token found");
+    return res.status(401).json({ error: "Unauthorized" });
   }
 
   try {
-    const decoded = jwt.verify(token, SECRET);
     console.log("[DEBUG] Token Decoded:", decoded);
 
     if (decoded.role !== 'ADMIN') {
@@ -271,11 +283,10 @@ app.post('/api/admin/users', async (req, res) => {
 });
 
 app.delete('/api/admin/users/:id', async (req, res) => {
-  const token = req.cookies.token;
-  if (!token) return res.status(401).json({ error: "Unauthorized" });
+  const decoded = getUserFromRequest(req);
+  if (!decoded) return res.status(401).json({ error: "Unauthorized" });
 
   try {
-    const decoded = jwt.verify(token, SECRET);
     if (decoded.role !== 'ADMIN') {
       return res.status(403).json({ error: "Only Admins can delete users" });
     }
@@ -299,6 +310,11 @@ app.delete('/api/admin/users/:id', async (req, res) => {
 
 app.post('/api/admin/sessions/:name/end', async (req, res) => {
   // Allow Operators and Admins to end sessions
+  const decoded = getUserFromRequest(req);
+  if (!decoded || (decoded.role !== 'ADMIN' && decoded.role !== 'OPERATOR')) {
+    return res.status(403).json({ error: "Unauthorized" });
+  }
+
   const { name } = req.params;
   try {
     const session = await prisma.gameSession.findUnique({ where: { name } });

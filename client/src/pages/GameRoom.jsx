@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Eye, Trophy, Play, Plus, Trash2, ShieldAlert, X, Edit3, BarChart3, History, LogOut, HelpCircle, Check, User, Gavel } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Eye, LogOut, Play, Trash2, User, Check, X, ShieldAlert, Edit3 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const API_URL = import.meta.env.VITE_BACKEND_URL || 'https://teen-patti-app.onrender.com';
@@ -213,17 +213,24 @@ const GameRoom = () => {
             return { ...p, sessionBalance: p.sessionBalance + balanceChange };
         });
 
+        const token = localStorage.getItem('token');
+        const headers = {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        };
+
         try {
             await fetch(`${API_URL}/api/games/hand`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({
                     winner,
                     pot,
                     logs: currentLogs,
                     netChanges,
                     sessionName
-                })
+                }),
+                credentials: 'include'
             });
             // Increment round locally for immediate feedback, server sync will confirm
             setCurrentRound(prev => prev + 1);
