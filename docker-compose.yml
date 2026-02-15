@@ -1,0 +1,34 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: teen-patti-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: teen_patti_local
+      POSTGRES_USER: teen_patti_user
+      POSTGRES_PASSWORD: teen_patti_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - teen-patti-network
+
+  # Redis for session management (optional for future scaling)
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: teen-patti-redis
+  #   restart: unless-stopped
+  #   ports:
+  #     - "6379:6379"
+  #   networks:
+  #     - teen-patti-network
+
+volumes:
+  postgres_data:
+
+networks:
+  teen-patti-network:
+    driver: bridge

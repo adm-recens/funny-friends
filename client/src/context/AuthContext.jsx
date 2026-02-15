@@ -11,6 +11,18 @@ const socket = io(API_URL, {
     withCredentials: true
 });
 
+// Debug listeners (will be attached once socket is used)
+socket.on('connect', () => {
+    try { console.log('[Socket] connected', { id: socket.id, auth: socket.auth }); } catch(e){console.log('[Socket] connect log failed', e)}
+});
+socket.on('connect_error', (err) => {
+    console.error('[Socket] connect_error', err && err.message ? err.message : err);
+});
+socket.on('disconnect', (reason) => {
+    console.warn('[Socket] disconnected', reason);
+});
+socket.on('reconnect_attempt', (num) => console.log('[Socket] reconnect attempt', num));
+
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);

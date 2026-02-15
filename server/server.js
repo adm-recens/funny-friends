@@ -1,3 +1,6 @@
+// Load environment variables
+require('dotenv').config();
+
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -7,6 +10,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const cookieParser = require('cookie-parser');
 const morgan = require('morgan');
+const GameManager = require('./game/GameManager');
 
 const app = express();
 const server = http.createServer(app);
@@ -18,7 +22,13 @@ const CLIENT_URL = process.env.CLIENT_URL || "https://teen-patti-client.onrender
 const ALLOWED_ORIGINS = [
   CLIENT_URL,
   "https://teen-patti-client.onrender.com",
-  "https://teen-patti-app.onrender.com"
+  "https://teen-patti-app.onrender.com",
+  "http://localhost:3000",
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:5174"
 ];
 
 app.use(morgan('dev')); // Log requests to console
@@ -26,7 +36,7 @@ app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    if (ALLOWED_ORIGINS.includes(origin) || origin.endsWith('.onrender.com')) {
+    if (ALLOWED_ORIGINS.includes(origin) || origin.endsWith('.onrender.com') || origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
@@ -49,7 +59,7 @@ const io = new Server(server, {
   cors: {
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
-      if (ALLOWED_ORIGINS.includes(origin) || origin.endsWith('.onrender.com')) {
+      if (ALLOWED_ORIGINS.includes(origin) || origin.endsWith('.onrender.com') || origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));
@@ -151,12 +161,12 @@ app.post('/api/games/hand', async (req, res) => {
     const session = await prisma.gameSession.findUnique({ where: { name: sessionName } });
     if (!session) return res.status(404).json({ error: "Session not found" });
 
-    // Save Hand History
+    // Save Hand History (stringify logs for SQLite)
     await prisma.gameHand.create({
       data: {
         winner: winner.name,
         potSize: pot,
-        logs: logs,
+        logs: JSON.stringify(logs || []),
         sessionId: session.id
       }
     });
@@ -179,18 +189,33 @@ app.post('/api/games/hand', async (req, res) => {
       });
     }
 
-    // Update Session Round
-    const updatedSession = await prisma.gameSession.update({
-      where: { id: session.id },
-      data: { currentRound: { increment: 1 } }
-    });
+    // Check if this was the final round BEFORE incrementing
+    const currentRound = session.currentRound;
+    const isSessionOver = currentRound >= session.totalRounds;
 
-    // Check if session should end
-    if (updatedSession.currentRound > updatedSession.totalRounds) {
+    let nextRound = currentRound;
+    if (!isSessionOver) {
+      // Only increment if session is not over
+      const updatedSession = await prisma.gameSession.update({
+        where: { id: session.id },
+        data: { currentRound: { increment: 1 } }
+      });
+      nextRound = updatedSession.currentRound;
+    }
+
+    // Update in-memory manager's round as well
+    const manager = activeSessions.get(sessionName);
+    if (manager && !isSessionOver) {
+      manager.currentRound = nextRound;
+    }
+
+    if (isSessionOver) {
       await prisma.gameSession.update({
         where: { id: session.id },
         data: { isActive: false }
       });
+      // We will emit session_ended AFTER the hand summary is shown or handled, 
+      // but to be safe we emit it here too so the state is consistent.
       io.to(sessionName).emit('session_ended', { reason: 'MAX_ROUNDS_REACHED' });
       if (activeSessions.has(sessionName)) {
         activeSessions.delete(sessionName);
@@ -198,8 +223,15 @@ app.post('/api/games/hand', async (req, res) => {
     }
 
     // Broadcast update
-    io.to(sessionName).emit('game_update', { type: 'HAND_COMPLETE', winner, pot, netChanges, currentRound: updatedSession.currentRound });
-    res.json({ success: true, currentRound: updatedSession.currentRound });
+    io.to(sessionName).emit('game_update', {
+      type: 'HAND_COMPLETE',
+      winner,
+      pot,
+      netChanges,
+      currentRound: nextRound,
+      isSessionOver
+    });
+    res.json({ success: true, currentRound: nextRound, isSessionOver });
 
   } catch (e) {
     console.error(e);
@@ -341,6 +373,65 @@ app.post('/api/admin/sessions/:name/end', async (req, res) => {
   }
 });
 
+// Get session details with hands
+app.get('/api/admin/sessions/:name', async (req, res) => {
+  const decoded = getUserFromRequest(req);
+  if (!decoded || (decoded.role !== 'ADMIN' && decoded.role !== 'OPERATOR')) {
+    return res.status(403).json({ error: "Unauthorized" });
+  }
+
+  const { name } = req.params;
+  try {
+    const session = await prisma.gameSession.findUnique({
+      where: { name },
+      include: {
+        hands: {
+          orderBy: { createdAt: 'desc' }
+        },
+        players: true
+      }
+    });
+    
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    
+    res.json(session);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Failed to fetch session details" });
+  }
+});
+
+// Delete session and all related data
+app.delete('/api/admin/sessions/:name', async (req, res) => {
+  const decoded = getUserFromRequest(req);
+  if (!decoded || decoded.role !== 'ADMIN') {
+    return res.status(403).json({ error: "Only admins can delete sessions" });
+  }
+
+  const { name } = req.params;
+  try {
+    const session = await prisma.gameSession.findUnique({ where: { name } });
+    if (!session) return res.status(404).json({ error: "Session not found" });
+
+    // Delete related data first
+    await prisma.gameHand.deleteMany({ where: { sessionId: session.id } });
+    await prisma.player.deleteMany({ where: { sessionId: session.id } });
+    
+    // Delete the session
+    await prisma.gameSession.delete({ where: { id: session.id } });
+    
+    // Remove from active sessions if present
+    if (activeSessions.has(name)) {
+      activeSessions.delete(name);
+    }
+
+    res.json({ success: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Failed to delete session" });
+  }
+});
+
 app.post('/api/sessions', async (req, res) => {
   const { name, totalRounds, players } = req.body; // players: [{ userId, seat, name }]
 
@@ -360,14 +451,22 @@ app.post('/api/sessions', async (req, res) => {
       // Create Initial Players if provided
       if (players && players.length > 0) {
         for (const p of players) {
-          // Check if player entry exists for this user, else create
-          // For simplicity in this game model, we might just create a new Player entry or update existing
-          // But since Player is unique by name/user, we upsert
           if (p.userId) {
+            // Registered user player
             await prisma.player.upsert({
               where: { userId: p.userId },
               update: { sessionId: session.id, seatPosition: p.seat, sessionBalance: 0 },
               create: { name: p.name, userId: p.userId, sessionId: session.id, seatPosition: p.seat, sessionBalance: 0 }
+            });
+          } else {
+            // Guest player - create new entry
+            await prisma.player.create({
+              data: { 
+                name: p.name, 
+                sessionId: session.id, 
+                seatPosition: p.seat, 
+                sessionBalance: 0 
+              }
             });
           }
         }
@@ -385,21 +484,75 @@ app.post('/api/sessions', async (req, res) => {
         seat: p.seatPosition
       }));
 
-      activeSessions.set(name, {
-        sessionId: session.id,
-        totalRounds: session.totalRounds,
-        currentRound: session.currentRound,
-        gameState: {
-          players: initialPlayers, // Pre-fill players
-          gamePlayers: [],
-          pot: 0,
-          currentStake: 20,
-          activePlayerIndex: 0,
-          currentLogs: []
-        },
-        viewerRequests: new Map(),
-        approvedViewers: new Set()
+      // Create GameManager instance
+      const manager = new GameManager(session.id, name, session.totalRounds);
+      manager.currentRound = session.currentRound || 1; // Default to 1 for new sessions
+      manager.setPlayers(initialPlayers);
+      
+      console.log(`[DEBUG] Session ${name} initialized with ${initialPlayers.length} players:`, initialPlayers);
+
+      // Hook up events
+      manager.on('state_change', (state) => {
+        io.to(name).emit('game_update', state);
       });
+      manager.on('session_ended', async (data) => {
+        // Mark session as inactive in database
+        try {
+          await prisma.gameSession.update({
+            where: { name },
+            data: { isActive: false }
+          });
+          console.log(`[DEBUG] Session ${name} marked as complete`);
+        } catch (e) {
+          console.error('[ERROR] Failed to mark session as complete:', e);
+        }
+        
+        io.to(name).emit('session_ended', data);
+        activeSessions.delete(name);
+      });
+      manager.on('hand_complete', async (summary) => {
+        // Save hand to database
+        try {
+          const session = await prisma.gameSession.findUnique({ where: { name } });
+          if (session) {
+            // Save hand history
+            await prisma.gameHand.create({
+              data: {
+                winner: summary.winner.name,
+                potSize: summary.pot,
+                logs: JSON.stringify([]),
+                sessionId: session.id
+              }
+            });
+            
+            // Update player balances
+            for (const [playerId, change] of Object.entries(summary.netChanges)) {
+              const pid = parseInt(playerId);
+              await prisma.player.upsert({
+                where: { id: pid },
+                update: {
+                  sessionBalance: { increment: change }
+                },
+                create: {
+                  id: pid,
+                  name: "Player " + pid,
+                  sessionBalance: change,
+                  sessionId: session.id
+                }
+              });
+            }
+            
+            console.log(`[DEBUG] Hand saved for session ${name}`);
+          }
+        } catch (e) {
+          console.error('[ERROR] Failed to save hand:', e);
+        }
+        
+        io.to(name).emit('game_update', { type: 'HAND_COMPLETE', ...summary });
+      });
+
+      activeSessions.set(name, manager);
+      console.log(`Initialized GameManager for session ${name}`);
     }
 
     res.json({ success: true, session });
@@ -410,6 +563,7 @@ app.post('/api/sessions', async (req, res) => {
 });
 
 // 5. REAL-TIME SOCKET
+
 // --- IN-MEMORY STATE ---
 const activeSessions = new Map();
 
@@ -460,18 +614,20 @@ io.on('connection', (socket) => {
 
   // Create/Join Session (Operator)
   socket.on('join_session', async ({ sessionName, role }) => {
-    if (role === 'OPERATOR' && !isOperatorOrAdmin()) {
-      socket.emit('error_message', "Unauthorized: You are not an Operator.");
-      return;
-    }
-
+    console.log('[DEBUG] join_session called:', sessionName, 'role:', role, 'socket user:', socket.user.role);
     socket.join(sessionName);
 
+    // Operator Logic: Initialize Manager
     if (role === 'OPERATOR') {
-      let session = activeSessions.get(sessionName);
+      if (!isOperatorOrAdmin()) {
+        console.log('[DEBUG] Operator join unauthorized');
+        return socket.emit('error_message', "Unauthorized");
+      }
 
-      // If not in memory, try to restore from DB
-      if (!session) {
+      let manager = activeSessions.get(sessionName);
+      console.log('[DEBUG] Manager exists in activeSessions:', !!manager);
+      if (!manager) {
+        // Try load from DB
         try {
           const dbSession = await prisma.gameSession.findUnique({ where: { name: sessionName } });
           if (dbSession && dbSession.isActive) {
@@ -483,111 +639,85 @@ io.on('connection', (socket) => {
               seat: p.seatPosition
             }));
 
-            session = {
-              sessionId: dbSession.id,
-              totalRounds: dbSession.totalRounds,
-              currentRound: dbSession.currentRound,
-              gameState: {
-                players: initialPlayers,
-                gamePlayers: [],
-                pot: 0,
-                currentStake: 20,
-                activePlayerIndex: 0,
-                currentLogs: []
-              },
-              viewerRequests: new Map(),
-              approvedViewers: new Set()
-            };
-            activeSessions.set(sessionName, session);
-            console.log(`Restored session '${sessionName}' from DB.`);
+            manager = new GameManager(dbSession.id, sessionName, dbSession.totalRounds);
+            manager.currentRound = dbSession.currentRound || 1;
+            manager.setPlayers(initialPlayers);
+            console.log(`[DEBUG] Restored session ${sessionName} from DB with ${initialPlayers.length} players`);
+
+            // Hook up events
+            manager.on('state_change', (state) => {
+              io.to(sessionName).emit('game_update', state);
+            });
+            manager.on('hand_complete', (summary) => {
+              io.to(sessionName).emit('game_update', { type: 'HAND_COMPLETE', ...summary });
+            });
+
+            activeSessions.set(sessionName, manager);
+            console.log(`Initialized GameManager for ${sessionName}`);
+          } else {
+            return socket.emit('session_ended', { reason: "Session not found" });
           }
-        } catch (e) {
-          console.error("Failed to restore session", e);
+        } catch (e) { console.error("Restore Error:", e); }
+      }
+
+      // Send current state
+      if (manager) {
+        const state = manager.getPublicState();
+        console.log('[DEBUG] Sending game_update to operator. Phase:', state.phase, 'Players:', state.players.length, 'gamePlayers:', state.gamePlayers.length);
+        socket.emit('game_update', state);
+        if (manager.viewerRequests) {
+          // manager.viewerRequests.forEach(req => socket.emit('viewer_requested', req)); // If mapped
         }
       }
-
-      if (session) {
-        socket.emit('game_update', {
-          ...session.gameState,
-          currentRound: session.currentRound,
-          totalRounds: session.totalRounds
-        });
-        session.viewerRequests.forEach(req => {
-          socket.emit('viewer_requested', req);
-        });
-      } else {
-        // Session not found or ended
-        socket.emit('session_ended', { reason: "Session not found or ended" });
+    } else {
+      // Viewer/Player Join
+      const manager = activeSessions.get(sessionName);
+      if (manager) {
+        socket.emit('game_update', manager.getPublicState());
       }
     }
   });
 
-  // Operator sends latest state
-  socket.on('sync_state', ({ sessionName, state }) => {
-    if (!isOperatorOrAdmin()) return;
-
-    const session = activeSessions.get(sessionName);
-    if (session) {
-      session.gameState = state;
-      const viewerIds = Array.from(session.approvedViewers);
-      viewerIds.forEach(vid => {
-        io.to(vid).emit('game_update', session.gameState);
-      });
+  // Game Actions
+  socket.on('game_action', (action) => {
+    console.log('[DEBUG] game_action received:', action.type, 'for session:', action.sessionName);
+    if (!isOperatorOrAdmin()) {
+      console.log('[DEBUG] Unauthorized - user role:', socket.user.role);
+      return;
     }
-  });
 
-  // Operator approves a viewer
-  socket.on('resolve_access', ({ sessionName, viewerId, approved }) => {
-    if (!isOperatorOrAdmin()) return;
+    const manager = activeSessions.get(action.sessionName);
+    if (!manager) {
+      console.log('[DEBUG] No manager found for session:', action.sessionName);
+      return;
+    }
+    
+    console.log('[DEBUG] Manager found. Current phase:', manager.gameState.phase, 'Players:', manager.gameState.players.length);
 
-    const session = activeSessions.get(sessionName);
-    if (!session) return;
-
-    if (approved) {
-      session.approvedViewers.add(viewerId);
-      io.to(viewerId).emit('access_granted', session.gameState);
-      const viewerSocket = io.sockets.sockets.get(viewerId);
-      if (viewerSocket) viewerSocket.join(sessionName);
+    if (action.type === 'START_GAME') {
+      console.log('[DEBUG] Calling startRound()');
+      const result = manager.startRound();
+      console.log('[DEBUG] startRound result:', result);
+      if (!result.success) socket.emit('error_message', result.error);
     } else {
-      io.to(viewerId).emit('access_denied');
+      const result = manager.handleAction(action);
+      if (!result.success) socket.emit('error_message', result.error);
     }
-    session.viewerRequests.delete(viewerId);
   });
 
   // End Session
   socket.on('end_session', async ({ sessionName }) => {
     if (!isOperatorOrAdmin()) return;
-
-    const session = await prisma.gameSession.findUnique({ where: { name: sessionName } });
-
-    if (session) {
-      await prisma.gameSession.update({
-        where: { id: session.id },
-        data: { isActive: false }
-      });
+    const manager = activeSessions.get(sessionName);
+    if (manager) {
+      await prisma.gameSession.update({ where: { id: manager.sessionId }, data: { isActive: false } });
       activeSessions.delete(sessionName);
       io.to(sessionName).emit('session_ended', { reason: 'OPERATOR_ENDED' });
     }
   });
 
-  // --- VIEWER EVENTS ---
-  socket.on('request_access', ({ sessionName, name }) => {
-    const session = activeSessions.get(sessionName);
-    if (!session) {
-      socket.emit('error_message', "Session not found or inactive.");
-      return;
-    }
-
-    session.viewerRequests.set(socket.id, { name, socketId: socket.id });
-    io.to(sessionName).emit('viewer_requested', { name, socketId: socket.id });
-  });
-
   socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
-    activeSessions.forEach(session => {
-      if (session.viewerRequests.has(socket.id)) session.viewerRequests.delete(socket.id);
-      if (session.approvedViewers.has(socket.id)) session.approvedViewers.delete(socket.id);
-    });
+    // Cleanup if needed
   });
 });
 
@@ -595,6 +725,4 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log("NODE_ENV:", process.env.NODE_ENV);
-  console.log("CLIENT_URL:", process.env.CLIENT_URL);
-  console.log("Is Production Cookie Mode:", process.env.NODE_ENV === 'production' || (process.env.CLIENT_URL && process.env.CLIENT_URL.includes('onrender')));
 });

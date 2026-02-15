@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Eye, LogOut, Play, Trash2, User, Check, X, ShieldAlert, Edit3, Plus, Trophy } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -9,13 +9,14 @@ const GameRoom = () => {
     const { sessionName } = useParams();
     const navigate = useNavigate();
     const { user, socket, logout } = useAuth();
+    const [connectionError, setConnectionError] = useState(null);
 
-    // Local State
+    // Local Presentation State
     const [viewerName, setViewerName] = useState('');
     const [accessStatus, setAccessStatus] = useState('IDLE'); // IDLE, PENDING, GRANTED, DENIED
 
-    // Game State
-    const [players, setPlayers] = useState([]); // Array of { id, name, sessionBalance, seat }
+    // Server Synced State
+    const [players, setPlayers] = useState([]);
     const [gamePlayers, setGamePlayers] = useState([]);
     const [currentRound, setCurrentRound] = useState(1);
     const [totalRounds, setTotalRounds] = useState(10);
@@ -23,396 +24,278 @@ const GameRoom = () => {
     const [currentStake, setCurrentStake] = useState(20);
     const [activePlayerIndex, setActivePlayerIndex] = useState(0);
     const [currentLogs, setCurrentLogs] = useState([]);
-    const [viewerRequests, setViewerRequests] = useState([]);
+    const [phase, setPhase] = useState('SETUP'); // SETUP, ACTIVE, SHOWDOWN
+    const [sideShowRequest, setSideShowRequest] = useState(null); // From Server
+    const [showRequest, setShowRequest] = useState(null); // For Force Show
+    const [showShowSelection, setShowShowSelection] = useState(false);
+    const [showShowResult, setShowShowResult] = useState(null); // For operator to select winner
 
-    // Modals
-    const [showRoundSummary, setShowRoundSummary] = useState(false);
-    const [showSessionSummary, setShowSessionSummary] = useState(false);
+    // Modals & summaries
     const [roundSummaryData, setRoundSummaryData] = useState(null);
     const [sessionSummaryData, setSessionSummaryData] = useState(null);
+    const [showRoundSummary, setShowRoundSummary] = useState(false);
+    const [showSessionSummary, setShowSessionSummary] = useState(false);
+    const [showSideShowSelection, setShowSideShowSelection] = useState(false);
 
-    // --- SOCKET & SYNC ---
+    // Viewer Requests (Operator Only - kept local or sourced from server?)
+    const [viewerRequests, setViewerRequests] = useState([]);
+
+    // --- SOCKET LISTENERS ---
     useEffect(() => {
         if (!socket.connected) socket.connect();
 
-        if (user?.role === 'OPERATOR') {
+        // Join
+        const isOperatorOrAdmin = user?.role === 'OPERATOR' || user?.role === 'ADMIN';
+        if (isOperatorOrAdmin) {
+            console.log('[CLIENT] Emitting join_session as OPERATOR');
             socket.emit('join_session', { sessionName, role: 'OPERATOR' });
+        } else {
+            // Viewer/Player join logic would go here
+            console.log('[CLIENT] User is viewer/player, not joining as operator');
         }
 
-        socket.on('game_update', (serverState) => {
-            if (serverState) {
-                if (serverState.type === 'HAND_COMPLETE') {
-                    setRoundSummaryData({
-                        winner: serverState.winner,
-                        pot: serverState.pot,
-                        netChanges: serverState.netChanges,
-                        currentRound: serverState.currentRound
-                    });
-                    setShowRoundSummary(true);
-                } else {
-                    restoreState(serverState);
-                }
+        socket.on('connect_error', (err) => {
+            console.error("Socket Connection Error:", err);
+            setConnectionError("Connection Lost. Reconnecting...");
+        });
+
+        socket.on('game_update', (state) => {
+            setConnectionError(null);
+            if (!state) {
+                console.log('[CLIENT] Received empty game_update');
+                return;
+            }
+            console.log('[CLIENT] Game Update received:', state);
+            console.log('[CLIENT] Players count:', state.players?.length, 'GamePlayers count:', state.gamePlayers?.length);
+
+            if (state.type === 'HAND_COMPLETE') {
+                setRoundSummaryData({
+                    winner: state.winner,
+                    pot: state.pot,
+                    netChanges: state.netChanges,
+                    currentRound: state.currentRound,
+                    isSessionOver: state.isSessionOver
+                });
+                setShowRoundSummary(true);
+                // Also sync state background
+                if (state.players) setPlayers(state.players);
+            } else {
+                // Update Local State from Server
+                setPlayers(state.players || []);
+                setGamePlayers(state.gamePlayers || []);
+                setPot(state.pot || 0);
+                setCurrentStake(state.currentStake || 20);
+                setActivePlayerIndex(state.activePlayerIndex !== undefined ? state.activePlayerIndex : 0);
+                setCurrentLogs(state.currentLogs || []);
+                setCurrentRound(state.currentRound || 1);
+                setTotalRounds(state.totalRounds || 10);
+                setPhase(state.phase || 'SETUP');
+                setSideShowRequest(state.sideShowRequest || null);
+                setShowRequest(state.showRequest || null);
             }
         });
 
-        socket.on('viewer_requested', (request) => {
+        socket.on('viewer_requested', (req) => {
             if (user?.role === 'OPERATOR') {
                 setViewerRequests(prev => {
-                    if (prev.find(r => r.socketId === request.socketId)) return prev;
-                    return [...prev, request];
+                    if (prev.find(r => r.socketId === req.socketId)) return prev;
+                    return [...prev, req];
                 });
             }
         });
 
-        socket.on('access_granted', (initialState) => {
+        socket.on('access_granted', (state) => {
             setAccessStatus('GRANTED');
-            if (initialState) restoreState(initialState);
         });
 
-        socket.on('access_denied', () => {
-            setAccessStatus('DENIED');
-        });
+        socket.on('access_denied', () => setAccessStatus('DENIED'));
 
         socket.on('session_ended', ({ reason }) => {
-            if (reason === 'MAX_ROUNDS_REACHED' || reason === 'ADMIN_ENDED') {
-                setSessionSummaryData({ reason });
-                setShowSessionSummary(true);
-            } else {
-                alert(`Session Ended: ${reason}`);
-                navigate('/');
-            }
+            setSessionSummaryData({ reason });
+            setShowSessionSummary(true);
         });
 
+        socket.on('error_message', (msg) => alert(`Error: ${msg}`));
+
         return () => {
+            socket.off('connect_error');
             socket.off('game_update');
             socket.off('viewer_requested');
             socket.off('access_granted');
             socket.off('access_denied');
             socket.off('session_ended');
+            socket.off('error_message');
         };
-    }, [user, sessionName, socket, navigate]);
-
-    // Sync state (Operator only)
-    useEffect(() => {
-        if (user?.role === 'OPERATOR' && gamePlayers.length > 0) {
-            const currentState = {
-                players,
-                currentRound,
-                totalRounds,
-                gamePlayers,
-                pot,
-                currentStake,
-                activePlayerIndex,
-                currentLogs,
-                sessionName
-            };
-            socket.emit('sync_state', { sessionName, state: currentState });
-        }
-    }, [players, currentRound, totalRounds, gamePlayers, pot, currentStake, activePlayerIndex, currentLogs, user, sessionName, socket]);
-
-    const restoreState = (state) => {
-        let sortedPlayers = state.players || [];
-        if (sortedPlayers.length > 0 && sortedPlayers[0].seat) {
-            sortedPlayers.sort((a, b) => (a.seat || 99) - (b.seat || 99));
-        }
-        setPlayers(sortedPlayers);
-        setCurrentRound(state.currentRound || 1);
-        setTotalRounds(state.totalRounds || 10);
-        setGamePlayers(state.gamePlayers || []);
-        setPot(state.pot || 0);
-        setCurrentStake(state.currentStake || 20);
-        setActivePlayerIndex(state.activePlayerIndex !== undefined ? state.activePlayerIndex : 0);
-        setCurrentLogs(state.currentLogs || []);
-    };
+    }, [user, sessionName, socket]);
 
     // --- ACTIONS ---
-    const requestAccess = () => {
-        if (!viewerName.trim()) return;
-        setAccessStatus('PENDING');
-        socket.emit('request_access', { sessionName, name: viewerName });
+    const sendGameAction = (type, payload = {}) => {
+        const activePlayer = gamePlayers[activePlayerIndex]; // Local ref (might be slightly stale but acceptable for ID)
+        socket.emit('game_action', {
+            sessionName,
+            type,
+            playerId: activePlayer?.id, // Context for server verification
+            ...payload
+        });
     };
 
-    const resolveViewerRequest = (socketId, approved) => {
-        socket.emit('resolve_access', { sessionName, viewerId: socketId, approved });
-        setViewerRequests(prev => prev.filter(r => r.socketId !== socketId));
+    const startGame = () => sendGameAction('START_GAME');
+
+    const handleBet = (amount = null, isDouble = false) => {
+        // Validation handled on server, but basic client check is good UX
+        const min = isDouble ? currentStake * 2 : currentStake;
+        if (amount && parseInt(amount) < min) return alert(`Minimum bid is ${min}`);
+        sendGameAction('BET', { amount: amount ? parseInt(amount) : null, isDouble });
+    };
+
+    const handleCustomBid = () => {
+        const amount = prompt(`Enter custom bid (Min ${currentStake}):`, currentStake);
+        if (amount) handleBet(amount, false);
+    };
+
+    const handleFold = () => sendGameAction('FOLD');
+    const handleSeeCards = () => sendGameAction('SEEN');
+    const handleSideShow = () => {
+        // Show selection modal instead of direct action
+        setShowSideShowSelection(true);
+    };
+    const handleSideShowSelect = (targetId) => {
+        sendGameAction('SIDE_SHOW_REQUEST', { targetId });
+        setShowSideShowSelection(false);
+    };
+    const handleShow = () => {
+        const remainingPlayers = gamePlayers.filter(p => !p.folded);
+        const blindPlayers = remainingPlayers.filter(p => p.status === 'BLIND');
+        
+        // Check if this is a Force Show scenario (seen player vs 1-2 blind players)
+        if (activePlayer?.status === 'SEEN' && blindPlayers.length > 0 && blindPlayers.length <= 2) {
+            // Show selection modal
+            setShowRequest({ requester: activePlayer, blindPlayers });
+            setShowShowSelection(true);
+        } else if (remainingPlayers.length === 2) {
+            // Regular show with 2 players
+            sendGameAction('SHOW');
+        } else {
+            alert('Force Show only allowed when 1 or 2 blind players remain');
+        }
+    };
+    const handleShowSelect = (targetId) => {
+        sendGameAction('SHOW', { targetId });
+        setShowShowSelection(false);
+        setShowRequest(null);
     };
 
     const closeSession = () => {
-        if (confirm("Are you sure you want to close this session?")) {
+        if (confirm("End Session?")) {
             socket.emit('end_session', { sessionName });
             navigate('/');
         }
     };
-
-    const handleLogout = () => {
-        logout();
-        navigate('/');
-    };
-
+    const handleLogout = () => { logout(); navigate('/'); };
     const nextRound = () => {
         setShowRoundSummary(false);
         setRoundSummaryData(null);
-        setCurrentRound(prev => prev + 1);
-        setGamePlayers([]);
-    };
-
-    const startGame = () => {
-        const validPlayers = players.filter(p => p.name.trim() !== '');
-        if (validPlayers.length < 2) return alert("Need at least 2 players.");
-
-        const initialGamePlayers = validPlayers.map(p => ({
-            ...p,
-            status: 'BLIND',
-            folded: false,
-            invested: 5,
-        }));
-
-        setGamePlayers(initialGamePlayers);
-        setPot(initialGamePlayers.length * 5);
-        setCurrentStake(20);
-        setActivePlayerIndex(0);
-        setCurrentLogs([]);
-    };
-
-    // --- GAME LOGIC HELPERS ---
-    const getNextActiveIndex = (startIndex, playerList = gamePlayers) => {
-        let nextIndex = (startIndex + 1) % playerList.length;
-        let loopCount = 0;
-        while (playerList[nextIndex].folded && loopCount < playerList.length) {
-            nextIndex = (nextIndex + 1) % playerList.length;
-            loopCount++;
-        }
-        return nextIndex;
-    };
-
-    const handleSeeCards = () => {
-        const newPlayers = [...gamePlayers];
-        newPlayers[activePlayerIndex].status = 'SEEN';
-        setGamePlayers(newPlayers);
-    };
-
-    const handleFold = () => {
-        const newPlayers = [...gamePlayers];
-        newPlayers[activePlayerIndex].folded = true;
-        const remaining = newPlayers.filter(p => !p.folded);
-        if (remaining.length === 1) {
-            setGamePlayers(newPlayers);
-            endGame(remaining[0], newPlayers);
+        
+        // Check if session is complete
+        if (roundSummaryData?.isSessionOver) {
+            // Navigate back to admin dashboard
+            navigate('/admin');
         } else {
-            setGamePlayers(newPlayers);
-            setActivePlayerIndex(getNextActiveIndex(activePlayerIndex, newPlayers));
+            // Start the next round automatically
+            sendGameAction('START_GAME');
         }
     };
 
-    const handleBet = (amountOverride = null, isDouble = false) => {
-        const player = gamePlayers[activePlayerIndex];
-        let newStakeValue = currentStake;
-        if (amountOverride) {
-            const val = parseInt(amountOverride);
-            if (val >= currentStake) newStakeValue = val;
-            else return alert(`Bid must be at least ${currentStake}`);
-        } else if (isDouble) {
-            newStakeValue = currentStake * 2;
-        }
-        let costToPay = (player.status === 'BLIND') ? newStakeValue / 2 : newStakeValue;
-
-        const newPlayers = [...gamePlayers];
-        newPlayers[activePlayerIndex].invested += costToPay;
-        setGamePlayers(newPlayers);
-        setPot(prev => prev + costToPay);
-        setCurrentStake(newStakeValue);
-        setActivePlayerIndex(getNextActiveIndex(activePlayerIndex));
+    // Viewer Logic
+    const requestAccess = () => {
+        if (!viewerName) return;
+        setAccessStatus('PENDING');
+        socket.emit('request_access', { sessionName, name: viewerName });
+    };
+    const resolveViewerRequest = (sid, approved) => {
+        socket.emit('resolve_access', { sessionName, viewerId: sid, approved });
+        setViewerRequests(prev => prev.filter(r => r.socketId !== sid));
     };
 
-    const handleCustomBid = () => {
-        const amount = prompt(`Enter custom bid amount (Minimum ${currentStake}):`, currentStake);
-        if (amount) {
-            handleBet(amount);
-        }
-    };
-
-    const handleSideShow = () => {
-        alert("Side Show: As the Operator, please manually compare the cards of the current and previous player, and fold the losing player.");
-    };
-
-    const endGame = async (winner, finalGamePlayersState) => {
-        const netChanges = {};
-        const updatedMasterList = players.map(p => {
-            const gameP = finalGamePlayersState.find(gp => gp.id === p.id);
-            if (!gameP) { netChanges[p.id] = 0; return p; }
-            let balanceChange = (gameP.id === winner.id) ? pot - gameP.invested : -gameP.invested;
-            netChanges[p.id] = balanceChange;
-            return { ...p, sessionBalance: p.sessionBalance + balanceChange };
-        });
-
-        const token = localStorage.getItem('token');
-        const headers = {
-            'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        };
-
-        try {
-            await fetch(`${API_URL}/api/games/hand`, {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({
-                    winner,
-                    pot,
-                    logs: currentLogs,
-                    netChanges,
-                    sessionName
-                }),
-                credentials: 'include'
-            });
-
-            setRoundSummaryData({
-                winner: { name: winner.name },
-                pot,
-                netChanges
-            });
-            setShowRoundSummary(true);
-
-            setPlayers(updatedMasterList);
-        } catch (e) { console.error(e); }
-    };
 
     // --- RENDER ---
 
-    // 1. Viewer Request View
+    // 0. Connection Error
+    if (connectionError) return <div className="h-screen bg-black text-white flex flex-col gap-4 items-center justify-center p-8 text-center"><ShieldAlert className="text-red-500" size={48} /><h2 className="text-2xl font-bold">{connectionError}</h2><button onClick={() => window.location.reload()} className="bg-blue-600 px-4 py-2 rounded">Retry</button></div>;
+
+    // 1. Viewer Request
     if (user?.role === 'VIEWER' && accessStatus !== 'GRANTED') {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
-                <div className="bg-white/10 backdrop-blur-xl border border-white/20 w-full max-w-sm rounded-3xl p-8 shadow-2xl relative">
-                    <div className="text-center mb-8">
-                        <Eye size={48} className="text-blue-400 mx-auto mb-4" />
-                        <h2 className="text-2xl font-bold text-white">Request Access</h2>
-                        <p className="text-slate-400 text-sm mt-2">Join {sessionName}</p>
-                    </div>
-
+            <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+                <div className="bg-white p-8 rounded-xl max-w-sm w-full text-center">
+                    <h2 className="text-2xl font-bold mb-4 text-slate-800">Request Access</h2>
+                    <p className="mb-4 text-slate-500">To: {sessionName}</p>
                     {accessStatus === 'IDLE' && (
-                        <div className="space-y-4">
-                            <input
-                                type="text"
-                                value={viewerName}
-                                onChange={(e) => setViewerName(e.target.value)}
-                                placeholder="Your Name"
-                                className="w-full bg-slate-800/50 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:border-blue-500 focus:bg-slate-800 outline-none transition-all"
-                            />
-                            <button
-                                onClick={requestAccess}
-                                disabled={!viewerName.trim()}
-                                className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                            >
-                                Request Access
-                            </button>
-                            <button onClick={() => navigate('/')} className="w-full py-3 text-slate-400 hover:text-white text-sm font-bold">Cancel</button>
-                        </div>
+                        <>
+                            <input value={viewerName} onChange={e => setViewerName(e.target.value)} className="w-full border p-2 mb-4 rounded bg-slate-50" placeholder="Your Name" />
+                            <button onClick={requestAccess} className="bg-blue-600 text-white w-full py-2 rounded font-bold hover:bg-blue-700">Join</button>
+                        </>
                     )}
-
-                    {accessStatus === 'PENDING' && (
-                        <div className="text-center space-y-6">
-                            <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                            <p className="text-white font-bold animate-pulse">Waiting for approval...</p>
-                            <button onClick={() => navigate('/')} className="text-slate-400 hover:text-white text-sm font-bold">Cancel Request</button>
-                        </div>
-                    )}
-
-                    {accessStatus === 'DENIED' && (
-                        <div className="text-center space-y-6">
-                            <div className="w-16 h-16 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto"><X size={32} /></div>
-                            <div><h3 className="text-xl font-bold text-white mb-2">Access Denied</h3></div>
-                            <button onClick={() => setAccessStatus('IDLE')} className="w-full py-3 bg-slate-700 text-white rounded-xl font-bold hover:bg-slate-600 transition-all">Try Again</button>
-                        </div>
-                    )}
+                    {accessStatus === 'PENDING' && <div className="animate-pulse font-bold text-blue-600">Waiting for approval...</div>}
+                    {accessStatus === 'DENIED' && <div className="text-red-500 font-bold">Access Denied</div>}
                 </div>
             </div>
         );
     }
 
-    // 2. Game Setup (Operator Only, No Active Game)
-    if (gamePlayers.length === 0 && user?.role === 'OPERATOR') {
+    if (!user) return <div className="h-screen bg-black text-white flex items-center justify-center">Loading User...</div>;
+
+    // DEBUG: Show current state
+    console.log('[CLIENT DEBUG] phase:', phase, 'user.role:', user?.role, 'players:', players.length, 'gamePlayers:', gamePlayers.length);
+
+    // 3. Setup Phase (Operator/Admin Only)
+    const activePlayer = gamePlayers[activePlayerIndex];
+    const isOperatorOrAdmin = user?.role === 'OPERATOR' || user?.role === 'ADMIN';
+    if (phase === 'SETUP' && isOperatorOrAdmin) {
         return (
-            <div className="min-h-screen bg-slate-50 p-4 lg:p-8">
-                <div className="max-w-xl mx-auto">
-                    <div className="flex justify-between items-center mb-8">
-                        <div>
-                            <h1 className="text-3xl font-black text-slate-900 tracking-tight">Game Setup</h1>
-                            <p className="text-slate-500 font-medium">Session: {sessionName} (Round {currentRound}/{totalRounds})</p>
-                        </div>
-                        <div className="flex gap-3">
-                            <button onClick={handleLogout} className="px-4 py-2 bg-red-50 text-red-500 rounded-xl shadow-sm border border-red-100 hover:bg-red-100 transition-all font-bold flex items-center gap-2"><LogOut size={18} /> Logout</button>
+            <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans">
+                <div className="max-w-2xl mx-auto">
+                    <div className="flex justify-between items-center mb-6">
+                        <h1 className="text-3xl font-black text-slate-900">Session Setup</h1>
+                        <div className="flex gap-2">
+                            <button onClick={closeSession} className="bg-red-50 text-red-500 px-3 py-2 rounded-lg font-bold text-sm">Close</button>
+                            <button onClick={handleLogout} className="bg-white border px-3 py-2 rounded-lg font-bold text-sm">Logout</button>
                         </div>
                     </div>
 
-                    <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 p-6 mb-6">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="font-bold text-lg text-slate-800 flex items-center gap-2"><User size={20} className="text-blue-500" /> Active Players</h2>
+                    <div className="bg-white p-6 rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 mb-6">
+                        <div className="flex justify-between mb-4">
+                            <h2 className="font-bold text-lg flex items-center gap-2"><User size={20} /> Players ({players.length})</h2>
+                            <span className="text-sm font-bold bg-blue-50 text-blue-600 px-2 py-1 rounded">Round {currentRound}/{totalRounds}</span>
                         </div>
-                        <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
-                            {players.map((p, idx) => (
-                                <div key={p.id} className="group flex gap-3 items-center">
-                                    <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-400">{idx + 1}</div>
-                                    <input
-                                        value={p.name}
-                                        onChange={(e) => { const newP = [...players]; newP[idx].name = e.target.value; setPlayers(newP); }}
-                                        className="flex-1 bg-slate-50 border-2 border-transparent focus:bg-white focus:border-blue-500 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 outline-none transition-all placeholder:font-normal"
-                                        placeholder={`Player ${idx + 1} Name`}
-                                    />
-                                    <button onClick={() => setPlayers(players.filter((_, i) => i !== idx))} className="p-3 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"><Trash2 size={18} /></button>
+                        <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                            {players.map((p, i) => (
+                                <div key={i} className="flex gap-3 items-center bg-slate-50 p-3 rounded-xl">
+                                    <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center font-bold text-slate-500">{i + 1}</div>
+                                    <div className="flex-1 font-bold text-slate-700">{p.name}</div>
+                                    <div className="text-sm font-mono text-slate-400">Seat {p.seat || i + 1}</div>
                                 </div>
                             ))}
                         </div>
-                        <button onClick={() => { if (players.length < 17) setPlayers([...players, { id: Date.now(), name: '', sessionBalance: 0 }]) }} className="w-full mt-4 py-3 border-2 border-dashed border-slate-200 text-slate-400 rounded-xl flex justify-center items-center gap-2 font-bold text-sm hover:border-blue-300 hover:text-blue-500 hover:bg-blue-50 transition-all"><Plus size={18} /> Add New Seat</button>
+                        {players.length < 2 && <div className="mt-4 text-center text-red-500 font-medium bg-red-50 p-2 rounded">Need at least 2 players to start.</div>}
                     </div>
 
-                    <button onClick={startGame} className="w-full py-5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-2xl font-bold text-lg shadow-xl shadow-blue-500/30 hover:shadow-blue-500/50 active:scale-[0.98] transition-all flex items-center justify-center gap-3"><Play size={24} fill="currentColor" /> Start Round {currentRound}</button>
+                    <button onClick={startGame} disabled={players.length < 2} className="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-blue-500/30 disabled:opacity-50 transition-all flex items-center justify-center gap-2">
+                        <Play size={20} fill="white" /> Start Round {currentRound}
+                    </button>
 
                     {viewerRequests.length > 0 && (
-                        <div className="mt-8 bg-white p-4 rounded-2xl border border-slate-100 shadow-lg">
-                            <h3 className="font-bold text-slate-800 mb-3">Viewer Requests ({viewerRequests.length})</h3>
-                            <div className="space-y-2">
-                                {viewerRequests.map(req => (
-                                    <div key={req.socketId} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl">
-                                        <span className="font-bold text-slate-700">{req.name}</span>
-                                        <div className="flex gap-2">
-                                            <button onClick={() => resolveViewerRequest(req.socketId, true)} className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200"><Check size={16} /></button>
-                                            <button onClick={() => resolveViewerRequest(req.socketId, false)} className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200"><X size={16} /></button>
-                                        </div>
+                        <div className="mt-6 p-4 bg-white rounded-xl border border-slate-200">
+                            <h3 className="font-bold mb-3 flex items-center gap-2"><Eye size={18} /> Access Requests</h3>
+                            {viewerRequests.map(r => (
+                                <div key={r.socketId} className="flex justify-between items-center mb-2 bg-slate-50 p-2 rounded-lg">
+                                    <span className="font-medium">{r.name}</span>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => resolveViewerRequest(r.socketId, true)} className="p-1 px-3 bg-green-100 text-green-700 rounded-md text-sm font-bold">Accept</button>
+                                        <button onClick={() => resolveViewerRequest(r.socketId, false)} className="p-1 px-3 bg-red-100 text-red-700 rounded-md text-sm font-bold">Deny</button>
                                     </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Round Summary Modal (Setup Phase) */}
-                    {showRoundSummary && roundSummaryData && (
-                        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-                            <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in fade-in zoom-in duration-300">
-                                <div className="text-center mb-6">
-                                    <Trophy size={48} className="text-gold-500 mx-auto mb-4" />
-                                    <h2 className="text-3xl font-black text-slate-900 uppercase">Round Complete</h2>
-                                    <p className="text-slate-500 font-bold">Winner: <span className="text-blue-600">{roundSummaryData.winner.name}</span></p>
-                                    <p className="text-2xl font-black text-gold-500 mt-2">Pot: {roundSummaryData.pot}</p>
                                 </div>
-
-                                <div className="space-y-3 mb-8 max-h-60 overflow-y-auto">
-                                    {players.map(p => {
-                                        const change = roundSummaryData.netChanges ? roundSummaryData.netChanges[p.id] : 0;
-                                        return (
-                                            <div key={p.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100">
-                                                <span className="font-bold text-slate-700">{p.name}</span>
-                                                <span className={`font-black ${change >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                                    {change >= 0 ? '+' : ''}{change}
-                                                </span>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-
-                                <button onClick={nextRound} className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-blue-500/30 hover:bg-blue-700 transition-all">
-                                    Start Next Round
-                                </button>
-                            </div>
+                            ))}
                         </div>
                     )}
                 </div>
@@ -420,163 +303,374 @@ const GameRoom = () => {
         );
     }
 
-    // 3. Active Game View
-    const activePlayer = gamePlayers[activePlayerIndex];
-    if (!activePlayer) return null;
+    // 4. Active Game (or Showdown or Waiting for Active)
+    if (!activePlayer && phase === 'ACTIVE') {
+        // Fallback if state not synced yet
+        return <div className="h-screen bg-slate-900 text-white flex items-center justify-center animate-pulse">Syncing Game State...</div>;
+    }
 
-    const isBlind = activePlayer.status === 'BLIND';
+    const isBlind = activePlayer?.status === 'BLIND';
     const cost = isBlind ? currentStake / 2 : currentStake;
     const isViewer = user?.role === 'VIEWER';
+    
+    // Force Show logic
+    const remainingPlayers = gamePlayers.filter(p => !p.folded);
+    const blindPlayers = remainingPlayers.filter(p => p.status === 'BLIND');
+    const canForceShow = activePlayer?.status === 'SEEN' && blindPlayers.length > 0 && blindPlayers.length <= 2;
+    const canShow = remainingPlayers.length === 2;
+    const showButtonText = canForceShow ? 'FORCE SHOW' : 'SHOW';
 
     return (
         <div className="flex flex-col h-screen bg-slate-900 relative overflow-hidden">
-            {/* Table Felt Background */}
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-poker-felt via-poker-green to-poker-green-dark opacity-100 z-0"></div>
-            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/felt.png')] opacity-20 z-0 mix-blend-overlay"></div>
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-emerald-900 via-slate-900 to-black opacity-60"></div>
 
             {/* Header */}
-            <div className="bg-slate-900/80 backdrop-blur-md text-white p-4 shadow-lg z-10 border-b border-white/5">
-                <div className="flex justify-between items-start max-w-7xl mx-auto w-full">
-                    <div>
-                        <p className="text-gold-400 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
-                            {isViewer ? <span className="flex items-center gap-1 text-red-400 animate-pulse"><span className="w-2 h-2 bg-red-500 rounded-full"></span> LIVE VIEW </span> : ''}
-                            {sessionName} • Round {currentRound}/{totalRounds}
-                        </p>
-                        <div className="flex items-baseline gap-2">
-                            <span className="text-slate-400 text-sm font-bold uppercase">Pot</span>
-                            <p className="text-4xl font-black text-white tracking-tight">{pot}</p>
-                        </div>
+            <div className="relative z-10 bg-slate-900/80 backdrop-blur-md text-white p-4 flex justify-between items-center border-b border-white/5 shadow-2xl">
+                <div>
+                    <div className="flex items-center gap-3">
+                        <h1 className="font-bold text-slate-300 tracking-wide text-sm uppercase">{sessionName}</h1>
+                        <span className="bg-slate-800 text-xs px-2 py-1 rounded text-slate-400">R{currentRound}/{totalRounds}</span>
                     </div>
-                    <div className="flex gap-2">
-                        <button onClick={handleLogout} className="px-4 py-2 bg-white/10 rounded-xl hover:bg-white/20 transition-all text-slate-300 hover:text-white font-bold flex items-center gap-2"><LogOut size={18} /> Logout</button>
-                    </div>
+                    <div className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-yellow-600 mt-1">Pot: {pot}</div>
                 </div>
-                <div className="mt-4 flex justify-between items-center bg-black/30 p-3 rounded-xl border border-white/5 max-w-7xl mx-auto">
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Current Stake (Seen)</span>
-                    <span className="font-mono text-xl font-bold text-gold-400">{currentStake}</span>
+                <div className="flex gap-2">
+                    {!isViewer && <button onClick={closeSession} className="bg-red-500/10 text-red-500 border border-red-500/30 px-3 py-2 rounded-lg font-bold text-xs hover:bg-red-500/20 transition-all">END SESSION</button>}
+                    <button onClick={handleLogout} className="bg-white/5 text-slate-400 hover:text-white px-3 py-2 rounded-lg font-bold text-xs transition-all">LOGOUT</button>
                 </div>
             </div>
 
-            {/* Game Area */}
-            <div className="flex-1 overflow-y-auto p-4 z-10 custom-scrollbar">
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 max-w-7xl mx-auto">
+            {/* Table */}
+            <div className="flex-1 overflow-auto p-4 z-10 custom-scrollbar">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 max-w-6xl mx-auto">
                     {gamePlayers.map((p, idx) => {
                         const isActive = idx === activePlayerIndex;
+                        const isTarget = sideShowRequest?.target?.id === p.id;
+                        const isRequester = sideShowRequest?.requester?.id === p.id;
+
                         return (
-                            <div key={p.id} className={`relative group transition-all duration-300 ${isActive ? 'scale-105 z-20' : 'scale-100 z-10'} ${p.folded ? 'opacity-60 grayscale' : ''}`}>
-                                <div className={`absolute inset-0 bg-gradient-to-br ${isActive ? 'from-gold-400 to-gold-600' : 'from-slate-700 to-slate-800'} rounded-2xl blur-sm opacity-50 transition-opacity`}></div>
-                                <div className={`relative bg-slate-800 border-2 ${isActive ? 'border-gold-500 shadow-[0_0_30px_-5px_rgba(234,179,8,0.3)]' : 'border-slate-700'} rounded-2xl p-4 flex flex-col gap-3 transition-all`}>
-                                    <div className="flex justify-between items-start">
-                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm shadow-inner ${isActive ? 'bg-gold-500 text-slate-900' : 'bg-slate-700 text-slate-400'}`}>{idx + 1}</div>
-                                        {!p.folded && <div className={`text-[10px] font-bold px-2 py-1 rounded-lg uppercase tracking-wider ${p.status === 'BLIND' ? 'bg-slate-700 text-slate-400' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'}`}>{p.status}</div>}
+                            <div key={p.id || idx} className={`relative p-4 rounded-2xl border-2 transition-all duration-300 flex flex-col justify-between min-h-[140px]
+                                ${isActive ? 'border-yellow-500 bg-slate-800 shadow-[0_0_30px_rgba(234,179,8,0.15)] scale-[1.02]' : 'border-slate-800 bg-slate-800/50 opacity-90'}
+                                ${p.folded ? 'opacity-40 grayscale border-slate-800' : ''}
+                                ${(isTarget || isRequester) ? 'ring-2 ring-blue-500 z-20' : ''}
+                             `}>
+                                <div className="flex justify-between items-start">
+                                    <div className="flex flex-col">
+                                        <span className={`font-bold text-lg ${isActive ? 'text-white' : 'text-slate-400'}`}>{p.name}</span>
+                                        <span className="text-xs font-mono text-slate-500">Seat {p.seat}</span>
                                     </div>
-                                    <div>
-                                        <div className="font-bold text-white text-lg truncate flex items-center gap-2">{p.name} {p.folded && <span className="text-[10px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded border border-red-500/30">FOLD</span>}</div>
-                                        <div className="text-xs text-slate-400 font-mono mt-1 flex items-center gap-1"><div className="w-4 h-4 rounded-full bg-yellow-500/20 border border-yellow-500/50 flex items-center justify-center text-[8px] text-yellow-500">$</div>{p.invested}</div>
-                                    </div>
+                                    {!p.folded && <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase ${p.status === 'BLIND' ? 'bg-slate-700 text-slate-400' : 'bg-blue-900 text-blue-300'}`}>{p.status}</span>}
                                 </div>
+
+                                <div className="mt-4">
+                                    <div className="text-slate-400 text-xs uppercase tracking-wider mb-1">Invested</div>
+                                    <div className="font-mono text-xl text-yellow-500/80">{p.invested}</div>
+                                </div>
+
+                                {isActive && !p.folded && <div className="absolute -top-3 -right-3 w-6 h-6 bg-yellow-500 rounded-full animate-bounce"></div>}
                             </div>
-                        )
+                        );
                     })}
                 </div>
             </div>
 
-            {/* Controls */}
-            {isViewer ? (
-                <div className="bg-slate-900 border-t border-white/10 p-6 shadow-[0_-10px_40px_-10px_rgba(0,0,0,0.5)] z-20 text-center backdrop-blur-md">
-                    <p className="font-bold text-slate-500 animate-pulse flex items-center justify-center gap-2"><span className="w-2 h-2 bg-slate-500 rounded-full"></span> Live Audience View</p>
-                </div>
-            ) : (
-                <div className="bg-slate-900/95 border-t border-white/10 p-4 pb-8 shadow-[0_-10px_40px_-10px_rgba(0,0,0,0.5)] z-20 backdrop-blur-xl">
-                    <div className="max-w-3xl mx-auto">
-                        <div className="flex justify-between items-center mb-4 px-2">
-                            <div className="flex items-center gap-3">
-                                <div className="relative"><span className="absolute inset-0 bg-green-500 rounded-full animate-ping opacity-75"></span><span className="relative w-3 h-3 bg-green-500 rounded-full block"></span></div>
-                                <span className="font-bold text-white text-lg">{activePlayer.name}'s Turn</span>
+            {/* Controls (Operator Only) */}
+            {!isViewer && activePlayer && !sideShowRequest && !showRequest && (
+                <div className="relative z-20 bg-slate-900 border-t border-slate-800 p-4 pb-8 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+                    <div className="max-w-4xl mx-auto">
+                        <div className="flex justify-between items-end mb-4">
+                            <div>
+                                <div className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Active Turn</div>
+                                <div className="text-2xl font-bold text-white flex items-center gap-2">
+                                    {activePlayer.name} <span className="text-sm bg-slate-800 px-2 py-1 rounded text-yellow-500 border border-yellow-500/20">{activePlayer.status}</span>
+                                </div>
                             </div>
-                            {isBlind && <button onClick={handleSeeCards} className="text-xs font-bold text-blue-400 border border-blue-500/30 bg-blue-500/10 px-4 py-2 rounded-full hover:bg-blue-500/20 transition-all flex items-center gap-2"><Eye size={14} /> See Cards</button>}
+                            <div className="text-right">
+                                <div className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Current Chaal</div>
+                                <div className="text-2xl font-mono text-yellow-500">{currentStake}</div>
+                            </div>
                         </div>
 
-                        <div className="grid grid-cols-4 gap-3 h-28">
-                            <button onClick={handleFold} disabled={isBlind} className={`flex flex-col items-center justify-center rounded-2xl border transition-all active:scale-95 ${isBlind ? 'bg-slate-800/50 text-slate-600 border-slate-800 cursor-not-allowed' : 'bg-red-500/10 text-red-500 border-red-500/30 hover:bg-red-500/20 hover:border-red-500/50'}`}><Trash2 size={24} className="mb-2" /><span className="text-xs font-black uppercase tracking-wider">Pack</span></button>
-                            <button onClick={handleSideShow} className="flex flex-col items-center justify-center rounded-2xl border bg-slate-800 text-blue-400 border-blue-500/30 hover:bg-blue-500/10 transition-all active:scale-95"><ShieldAlert size={24} className="mb-2" /><span className="text-xs font-black uppercase tracking-wider">Side Show</span></button>
-                            <button onClick={() => handleBet(null, false)} className="col-span-2 bg-gradient-to-b from-blue-500 to-blue-700 text-white rounded-2xl flex flex-col items-center justify-center active:scale-95 transition-all shadow-lg shadow-blue-900/50 border-t border-blue-400 relative overflow-hidden group"><div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div><span className="text-3xl font-black tracking-tight relative z-10">{cost}</span><span className="text-[10px] font-bold opacity-80 tracking-[0.2em] uppercase relative z-10">Chaal</span></button>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3 mt-3">
-                            <button onClick={() => handleBet(null, true)} className="py-4 bg-slate-800 text-green-400 border border-green-500/30 rounded-xl text-xs font-bold hover:bg-green-500/10 active:scale-95 transition-all uppercase tracking-wider">x2 Raise ({currentStake * 2})</button>
-                            <button onClick={handleCustomBid} className="py-4 border rounded-xl text-xs font-bold uppercase tracking-wider transition-all active:scale-95 bg-slate-800 text-yellow-400 border-yellow-500/30 hover:bg-yellow-500/10"><Edit3 size={14} className="inline mr-2 mb-0.5" /> Custom Bid</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Round Summary Modal (Active Game Phase) */}
-            {showRoundSummary && roundSummaryData && (
-                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in fade-in zoom-in duration-300">
-                        <div className="text-center mb-6">
-                            <Trophy size={48} className="text-gold-500 mx-auto mb-4" />
-                            <h2 className="text-3xl font-black text-slate-900 uppercase">Round Complete</h2>
-                            <p className="text-slate-500 font-bold">Winner: <span className="text-blue-600">{roundSummaryData.winner.name}</span></p>
-                            <p className="text-2xl font-black text-gold-500 mt-2">Pot: {roundSummaryData.pot}</p>
-                        </div>
-
-                        <div className="space-y-3 mb-8 max-h-60 overflow-y-auto">
-                            {players.map(p => {
-                                const change = roundSummaryData.netChanges ? roundSummaryData.netChanges[p.id] : 0;
-                                return (
-                                    <div key={p.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100">
-                                        <span className="font-bold text-slate-700">{p.name}</span>
-                                        <span className={`font-black ${change >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                            {change >= 0 ? '+' : ''}{change}
-                                        </span>
-                                    </div>
-                                );
-                            })}
-                        </div>
-
-                        {user?.role === 'OPERATOR' ? (
-                            <button onClick={nextRound} className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-blue-500/30 hover:bg-blue-700 transition-all">
-                                Start Next Round
+                        <div className="grid grid-cols-4 gap-3 h-20">
+                            {/* Pack */}
+                            <button onClick={handleFold} className="col-span-1 bg-gradient-to-br from-red-500/10 to-red-900/20 border border-red-500/30 text-red-500 rounded-xl font-bold text-sm hover:bg-red-500/20 hover:border-red-500/50 transition-all flex flex-col items-center justify-center gap-1">
+                                <Trash2 size={20} /> PACK
                             </button>
-                        ) : (
-                            <p className="text-center text-slate-400 font-bold animate-pulse">Waiting for Operator...</p>
-                        )}
+
+                            {/* Side Show / Show */}
+                            <button 
+                                onClick={handleSideShow} 
+                                disabled={isBlind || gamePlayers.filter(p => p.status === 'SEEN' && !p.folded && p.id !== activePlayer?.id).length === 0}
+                                className={`col-span-1 bg-gradient-to-br from-blue-500/10 to-blue-900/20 border border-blue-500/30 text-blue-400 rounded-xl font-bold text-sm transition-all flex flex-col items-center justify-center gap-1 ${(isBlind || gamePlayers.filter(p => p.status === 'SEEN' && !p.folded && p.id !== activePlayer?.id).length === 0) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-500/20'}`}
+                            >
+                                <ShieldAlert size={20} /> 
+                                <span>SIDE SHOW</span>
+                                <span className="text-[10px] opacity-70">+{cost}</span>
+                            </button>
+
+                            {/* Chaal */}
+                            <button onClick={() => handleBet(null, false)} className="col-span-1 bg-gradient-to-b from-yellow-500 to-yellow-600 text-black border-t border-white/20 rounded-xl font-black text-xl hover:translate-y-[-2px] hover:shadow-lg hover:shadow-yellow-500/20 transition-all active:translate-y-[1px] relative overflow-hidden group">
+                                <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform"></div>
+                                <span className="relative z-10 block text-xs font-bold opacity-60 uppercase tracking-widest mb-[-2px]">Chaal</span>
+                                <span className="relative z-10">{cost}</span>
+                            </button>
+
+                            {/* Actions Group */}
+                            <div className="col-span-1 grid grid-rows-2 gap-2">
+                                <button onClick={() => handleBet(null, true)} className="bg-slate-800 text-green-400 border border-green-500/30 rounded-lg text-xs font-bold hover:bg-green-500/10 transition-all uppercase">x2 Raise</button>
+                                <button onClick={handleCustomBid} className="bg-slate-800 text-yellow-400 border border-yellow-500/30 rounded-lg text-xs font-bold hover:bg-yellow-500/10 transition-all uppercase"><Edit3 size={12} className="inline mr-1" /> Custom</button>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3 mt-3">
+                            <button onClick={handleSeeCards} disabled={!isBlind} className={`flex-1 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border ${isBlind ? 'border-blue-500/30 text-blue-400 hover:bg-blue-500/10 cursor-pointer' : 'border-slate-800 text-slate-600 cursor-not-allowed opacity-50'}`}>
+                                <Eye size={16} /> SEE CARDS
+                            </button>
+                            <button 
+                                onClick={handleShow} 
+                                disabled={!canShow && !canForceShow}
+                                className={`flex-1 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border transition-all ${
+                                    canShow || canForceShow 
+                                        ? 'bg-slate-800 border-yellow-500/30 text-yellow-500 hover:bg-yellow-500/10' 
+                                        : 'border-slate-800 text-slate-600 cursor-not-allowed opacity-50'
+                                }`}
+                            >
+                                <Trophy size={16} /> {showButtonText}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
 
-            {/* Session Summary Modal */}
-            {showSessionSummary && sessionSummaryData && (
-                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
-                    <div className="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl animate-in fade-in zoom-in duration-300 border-4 border-gold-500">
-                        <div className="text-center mb-8">
-                            <div className="w-20 h-20 bg-gold-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <Trophy size={40} className="text-gold-600" />
-                            </div>
-                            <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tight">Game Over</h2>
-                            <p className="text-slate-500 font-bold mt-2">Final Standings</p>
-                        </div>
+            {/* Viewer Only View */}
+            {isViewer && (
+                <div className="relative z-20 bg-slate-900 border-t border-slate-800 p-6 text-center">
+                    <p className="text-slate-500 font-bold animate-pulse">Spectator Mode • Live Updates</p>
+                </div>
+            )}
 
-                        <div className="space-y-3 mb-8">
-                            {[...players].sort((a, b) => b.sessionBalance - a.sessionBalance).map((p, idx) => (
-                                <div key={p.id} className={`flex justify-between items-center p-4 rounded-2xl border-2 ${idx === 0 ? 'bg-gold-50 border-gold-200' : 'bg-slate-50 border-slate-100'}`}>
-                                    <div className="flex items-center gap-4">
-                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black ${idx === 0 ? 'bg-gold-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
-                                            {idx + 1}
-                                        </div>
-                                        <span className={`font-bold text-lg ${idx === 0 ? 'text-slate-900' : 'text-slate-600'}`}>{p.name}</span>
-                                    </div>
-                                    <span className={`font-black text-xl ${p.sessionBalance >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                                        {p.sessionBalance >= 0 ? '+' : ''}{p.sessionBalance}
+            {/* Modals */}
+            
+            {/* Side Show Selection Modal */}
+            {showSideShowSelection && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                    <div className="bg-white p-6 rounded-2xl max-w-sm w-full shadow-2xl animate-in zoom-in duration-200">
+                        <h3 className="text-xl font-black text-slate-900 mb-4 flex items-center gap-2">
+                            <ShieldAlert className="text-blue-600" /> 
+                            Select Player for Side Show
+                        </h3>
+                        <div className="bg-blue-50 p-3 rounded-xl mb-4">
+                            <p className="text-blue-800 text-sm font-medium">
+                                💰 Bid of {currentStake} placed. Now select a player:
+                            </p>
+                        </div>
+                        <p className="text-slate-500 mb-4 text-sm">
+                            Choose a player who has seen their cards:
+                        </p>
+                        <div className="space-y-2 mb-6 max-h-60 overflow-y-auto">
+                            {gamePlayers
+                                .filter(p => p.status === 'SEEN' && !p.folded && p.id !== activePlayer?.id)
+                                .map(p => (
+                                    <button
+                                        key={p.id}
+                                        onClick={() => handleSideShowSelect(p.id)}
+                                        className="w-full p-3 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded-xl text-left transition-all flex justify-between items-center"
+                                    >
+                                        <span className="font-bold text-slate-900">{p.name}</span>
+                                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">SEEN</span>
+                                    </button>
+                                ))}
+                        </div>
+                        {gamePlayers.filter(p => p.status === 'SEEN' && !p.folded && p.id !== activePlayer?.id).length === 0 && (
+                            <div className="text-center text-slate-400 py-4 mb-4">
+                                No eligible players found
+                            </div>
+                        )}
+                        <button 
+                            onClick={() => setShowSideShowSelection(false)} 
+                            className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            )}
+            
+            {/* Side Show Request - Operator Selects Winner */}
+            {sideShowRequest && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
+                    <div className="bg-white p-8 rounded-3xl max-w-md w-full shadow-2xl animate-in zoom-in duration-300">
+                        <div className="text-center mb-6">
+                            <ShieldAlert className="mx-auto text-blue-600 mb-2" size={48} />
+                            <h3 className="text-2xl font-black text-slate-900">Side Show Request</h3>
+                            <p className="text-slate-500 mt-2">Select who won the comparison</p>
+                        </div>
+                        
+                        <div className="space-y-4 mb-6">
+                            {/* Requester */}
+                            <button 
+                                onClick={() => sendGameAction('SIDE_SHOW_RESOLVE', { winnerId: sideShowRequest.requester.id })}
+                                className="w-full p-4 rounded-xl border-2 border-blue-200 bg-blue-50 hover:bg-blue-100 transition-all"
+                            >
+                                <div className="flex justify-between items-center">
+                                    <span className="font-bold text-slate-900">{sideShowRequest.requester.name}</span>
+                                    <span className="text-xs bg-blue-200 text-blue-800 px-2 py-1 rounded">Requester</span>
+                                </div>
+                            </button>
+                            
+                            <div className="text-center text-slate-400 font-bold">VS</div>
+                            
+                            {/* Target */}
+                            <button 
+                                onClick={() => sendGameAction('SIDE_SHOW_RESOLVE', { winnerId: sideShowRequest.target.id })}
+                                className="w-full p-4 rounded-xl border-2 border-purple-200 bg-purple-50 hover:bg-purple-100 transition-all"
+                            >
+                                <div className="flex justify-between items-center">
+                                    <span className="font-bold text-slate-900">{sideShowRequest.target.name}</span>
+                                    <span className="text-xs bg-purple-200 text-purple-800 px-2 py-1 rounded">Target</span>
+                                </div>
+                            </button>
+                        </div>
+                        
+                        <div className="bg-yellow-50 p-4 rounded-xl text-center">
+                            <p className="text-yellow-700 text-sm">
+                                💡 Click on the player with the better hand
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Show/Force Show Request - Operator Selects Winner */}
+            {showRequest && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
+                    <div className="bg-white p-8 rounded-3xl max-w-md w-full shadow-2xl animate-in zoom-in duration-300">
+                        <div className="text-center mb-6">
+                            <Trophy className="mx-auto text-yellow-500 mb-2" size={48} />
+                            <h3 className="text-2xl font-black text-slate-900">
+                                {showRequest.isForceShow ? 'Force Show' : 'Show'}
+                            </h3>
+                            <p className="text-slate-500 mt-2">Select who won</p>
+                        </div>
+                        
+                        {showRequest.isForceShow && (
+                            <div className="bg-yellow-50 p-3 rounded-xl mb-4">
+                                <p className="text-yellow-800 text-sm text-center">
+                                    ⚠️ If {showRequest.requester.name} loses, they pay 2x stake ({currentStake * 2})
+                                </p>
+                            </div>
+                        )}
+                        
+                        <div className="space-y-4 mb-6">
+                            {/* Requester */}
+                            <button 
+                                onClick={() => sendGameAction('SHOW_RESOLVE', { winnerId: showRequest.requester.id })}
+                                className="w-full p-4 rounded-xl border-2 border-blue-200 bg-blue-50 hover:bg-blue-100 transition-all"
+                            >
+                                <div className="flex justify-between items-center">
+                                    <span className="font-bold text-slate-900">{showRequest.requester.name}</span>
+                                    <span className={`text-xs px-2 py-1 rounded ${showRequest.requester.status === 'SEEN' ? 'bg-blue-200 text-blue-800' : 'bg-slate-600 text-slate-300'}`}>
+                                        {showRequest.requester.status}
                                     </span>
                                 </div>
+                            </button>
+                            
+                            <div className="text-center text-slate-400 font-bold">VS</div>
+                            
+                            {/* Target */}
+                            <button 
+                                onClick={() => sendGameAction('SHOW_RESOLVE', { winnerId: showRequest.target.id })}
+                                className="w-full p-4 rounded-xl border-2 border-purple-200 bg-purple-50 hover:bg-purple-100 transition-all"
+                            >
+                                <div className="flex justify-between items-center">
+                                    <span className="font-bold text-slate-900">{showRequest.target.name}</span>
+                                    <span className={`text-xs px-2 py-1 rounded ${showRequest.target.status === 'SEEN' ? 'bg-blue-200 text-blue-800' : 'bg-slate-600 text-slate-300'}`}>
+                                        {showRequest.target.status}
+                                    </span>
+                                </div>
+                            </button>
+                        </div>
+                        
+                        <div className="bg-yellow-50 p-4 rounded-xl text-center">
+                            <p className="text-yellow-700 text-sm">
+                                💡 Click on the player with the better hand
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Force Show Selection Modal */}
+            {showShowSelection && showRequest && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
+                    <div className="bg-white p-6 rounded-2xl max-w-sm w-full shadow-2xl animate-in zoom-in duration-200">
+                        <h3 className="text-xl font-black text-slate-900 mb-4 flex items-center gap-2">
+                            <Trophy className="text-yellow-500" /> 
+                            Force Show
+                        </h3>
+                        <div className="bg-yellow-50 p-3 rounded-xl mb-4">
+                            <p className="text-yellow-800 text-sm">
+                                ⚠️ If {showRequest.requester.name} loses, they'll pay 2x the current stake ({currentStake * 2})
+                            </p>
+                        </div>
+                        <p className="text-slate-500 mb-4 text-sm">
+                            Select a blind player to challenge:
+                        </p>
+                        <div className="space-y-2 mb-6">
+                            {showRequest.blindPlayers.map(p => (
+                                <button
+                                    key={p.id}
+                                    onClick={() => handleShowSelect(p.id)}
+                                    className="w-full p-3 bg-slate-50 hover:bg-yellow-50 border border-slate-200 hover:border-yellow-300 rounded-xl text-left transition-all flex justify-between items-center"
+                                >
+                                    <span className="font-bold text-slate-900">{p.name}</span>
+                                    <span className="text-xs bg-slate-700 text-slate-300 px-2 py-1 rounded">BLIND</span>
+                                </button>
                             ))}
                         </div>
-
-                        <button onClick={() => navigate('/')} className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold text-lg hover:bg-slate-800 transition-all">
-                            Return to Home
+                        <button 
+                            onClick={() => { setShowShowSelection(false); setShowRequest(null); }} 
+                            className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all"
+                        >
+                            Cancel
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {showRoundSummary && roundSummaryData && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
+                    <div className="bg-white p-8 rounded-3xl max-w-md w-full text-center shadow-2xl animate-in zoom-in duration-300 relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-yellow-400 to-yellow-600"></div>
+                        <Trophy className="mx-auto text-yellow-500 mb-4 drop-shadow-lg" size={64} />
+                        <h2 className="text-3xl font-black text-slate-900 mb-1 uppercase tracking-tight">Winner!</h2>
+                        <p className="text-2xl font-bold text-blue-600 mb-6">{roundSummaryData.winner.name}</p>
+
+                        <div className="bg-slate-50 rounded-2xl p-4 mb-6 border border-slate-100">
+                            <p className="text-slate-400 uppercase text-xs font-bold tracking-widest mb-1">Total Pot</p>
+                            <p className="text-4xl font-black text-slate-900 tracking-tighter">{roundSummaryData.pot}</p>
+                        </div>
+
+                        <button onClick={nextRound} className="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-bold text-lg shadow-xl shadow-blue-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all">
+                            {roundSummaryData.isSessionOver ? "View Final Results" : "Next Round"}
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {showSessionSummary && sessionSummaryData && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur p-4">
+                    <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl max-w-lg w-full text-center">
+                        <h2 className="text-4xl font-black text-white mb-4">Session Ended</h2>
+                        <p className="text-slate-400 mb-4">{sessionSummaryData.reason}</p>
+                        {sessionSummaryData.finalRound && (
+                            <p className="text-yellow-500 mb-8 font-bold">
+                                Completed {sessionSummaryData.finalRound} of {sessionSummaryData.totalRounds} rounds
+                            </p>
+                        )}
+                        <div className="flex gap-4 justify-center">
+                            <button onClick={() => navigate('/admin')} className="bg-blue-600 text-white px-8 py-3 rounded-full font-bold hover:bg-blue-700 transition-all">View Results</button>
+                            <button onClick={() => navigate('/')} className="bg-white text-black px-8 py-3 rounded-full font-bold hover:bg-slate-200 transition-all">Back to Home</button>
+                        </div>
                     </div>
                 </div>
             )}

@@ -5,12 +5,15 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 // Pages
 import Welcome from './pages/Welcome';
 import Login from './pages/Login';
+import Logout from './pages/Logout';
 import SessionSetup from './pages/SessionSetup';
 import GameRoom from './pages/GameRoom';
 import AdminDashboard from './pages/AdminDashboard';
+import OperatorDashboard from './pages/OperatorDashboard';
+import Viewer from './pages/Viewer';
 
 // Protected Route Component
-const ProtectedRoute = ({ children, requireAdmin = false }) => {
+const ProtectedRoute = ({ children, requireOperator = false, requireAdmin = false }) => {
   const { user, loading } = useAuth();
 
   if (loading) return <div>Loading...</div>;
@@ -19,7 +22,11 @@ const ProtectedRoute = ({ children, requireAdmin = false }) => {
     return <Navigate to="/login" replace />;
   }
 
-  if (requireAdmin && user.role !== 'OPERATOR' && user.role !== 'ADMIN' && user.username !== 'ram54') {
+  if (requireAdmin && user.role !== 'ADMIN') {
+    return <Navigate to="/" replace />;
+  }
+
+  if (requireOperator && user.role !== 'OPERATOR' && user.role !== 'ADMIN') {
     return <Navigate to="/" replace />;
   }
 
@@ -31,12 +38,14 @@ const AppRoutes = () => {
     <Routes>
       <Route path="/" element={<Welcome />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/logout" element={<Logout />} />
+      <Route path="/viewer/:sessionName" element={<Viewer />} />
 
-      {/* Protected Routes */}
+      {/* Protected Routes - Any logged in user */}
       <Route
         path="/setup"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute requireOperator={true}>
             <SessionSetup />
           </ProtectedRoute>
         }
@@ -49,6 +58,18 @@ const AppRoutes = () => {
           </ProtectedRoute>
         }
       />
+      
+      {/* Operator Routes */}
+      <Route
+        path="/operator-dashboard"
+        element={
+          <ProtectedRoute requireOperator={true}>
+            <OperatorDashboard />
+          </ProtectedRoute>
+        }
+      />
+      
+      {/* Admin Routes */}
       <Route
         path="/admin"
         element={
