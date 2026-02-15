@@ -1,5 +1,6 @@
 {
-  "name": "client",
+  "name": "funny-friends-client",
+  "description": "Funny Friends - Play games with friends securely and for fun",
   "private": true,
   "version": "0.0.0",
   "type": "module",

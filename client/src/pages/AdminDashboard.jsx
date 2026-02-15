@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, Gamepad2, Plus, Trash2, Eye, X, Shield, Activity, BarChart3, UserPlus, CheckCircle, AlertCircle, Clock } from 'lucide-react';
+import { ArrowLeft, Users, Gamepad2, Plus, Trash2, Eye, X, Heart, Activity, BarChart3, UserPlus, CheckCircle, AlertCircle, Clock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const API_URL = import.meta.env.VITE_BACKEND_URL || 'https://teen-patti-app.onrender.com';
@@ -404,10 +404,15 @@ const AdminDashboard = () => {
                     {/* Users Section */}
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                         <div className="p-6 border-b border-slate-100">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                                    <Shield size={20} className="text-purple-600" />
+                                    <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-pink-600 rounded-xl flex items-center justify-center">
+                                    <Heart className="text-white" size={20} />
                                 </div>
+                                <div>
+                                    <h1 className="text-xl font-black text-slate-900">Funny Friends Admin</h1>
+                                    <p className="text-sm text-slate-500">System Administration Panel</p>
+                                </div>
+                            </div>
                                 <h2 className="text-lg font-bold text-slate-900">Registered Users</h2>
                             </div>
                         </div>

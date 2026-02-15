@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Eye, ArrowLeft } from 'lucide-react';
+import { User, Eye, ArrowLeft, Heart } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const Login = () => {
@@ -46,8 +46,11 @@ const Login = () => {
                 <button onClick={() => navigate('/')} className="mb-6 text-slate-400 hover:text-white"><ArrowLeft /></button>
 
                 <div className="text-center mb-8">
-                    <h2 className="text-3xl font-bold text-white mb-2">Welcome Back</h2>
-                    <p className="text-slate-400">Sign in to continue</p>
+                    <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl mx-auto mb-4 flex items-center justify-center">
+                        <Heart size={32} className="text-white" />
+                    </div>
+                    <h2 className="text-3xl font-bold text-white mb-2">Funny Friends</h2>
+                    <p className="text-slate-400">Admin Login</p>
                 </div>
 
                 {error && (
