@@ -14,6 +14,7 @@ import OperatorDashboard from './pages/OperatorDashboard';
 import Viewer from './pages/Viewer';
 import Rummy from './pages/Rummy';
 import Setup from './pages/Setup';
+import Profile from './pages/Profile';
 
 // Setup Check Component
 const SetupCheck = ({ children }) => {
@@ -118,6 +119,16 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute requireAdmin={true}>
             <AdminDashboard />
+          </ProtectedRoute>
+        }
+      />
+      
+      {/* Profile Route - Any logged in user */}
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <Profile />
           </ProtectedRoute>
         }
       />

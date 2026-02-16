@@ -311,6 +311,96 @@ app.post('/api/auth/logout', (req, res) => {
   res.json({ success: true });
 });
 
+// PROFILE API - Get user profile
+app.get('/api/user/profile', requireAuth, async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { id: true, username: true, role: true, createdAt: true }
+    });
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({ user });
+  } catch (error) {
+    console.error('Error fetching profile:', error);
+    res.status(500).json({ error: 'Failed to fetch profile' });
+  }
+});
+
+// PROFILE API - Update username
+app.put('/api/user/profile', requireAuth, async (req, res) => {
+  try {
+    const { username } = req.body;
+    
+    if (!username || username.length < 3) {
+      return res.status(400).json({ error: 'Username must be at least 3 characters' });
+    }
+    
+    // Check if username is already taken
+    const existingUser = await prisma.user.findUnique({
+      where: { username }
+    });
+    
+    if (existingUser && existingUser.id !== req.user.id) {
+      return res.status(400).json({ error: 'Username already taken' });
+    }
+    
+    const updatedUser = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { username },
+      select: { id: true, username: true, role: true, createdAt: true }
+    });
+    
+    res.json({ success: true, user: updatedUser });
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+// PROFILE API - Change password
+app.put('/api/user/password', requireAuth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    
+    if (!newPassword || newPassword.length < 8) {
+      return res.status(400).json({ error: 'New password must be at least 8 characters' });
+    }
+    
+    // Get user with password
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id }
+    });
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Verify current password
+    const isValidPassword = await bcrypt.compare(currentPassword, user.password);
+    if (!isValidPassword) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+    
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+    
+    // Update password
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: { password: hashedPassword }
+    });
+    
+    res.json({ success: true, message: 'Password updated successfully' });
+  } catch (error) {
+    console.error('Error changing password:', error);
+    res.status(500).json({ error: 'Failed to change password' });
+  }
+});
+
 // 2. SAVE GAME API (requires authentication)
 app.post('/api/games/hand', requireAuth, async (req, res) => {
   const { winner, pot, logs, netChanges, sessionName } = req.body;

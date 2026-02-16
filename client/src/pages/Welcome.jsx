@@ -319,7 +319,10 @@ const Welcome = () => {
                         <div className="flex items-center gap-4">
                             {user ? (
                                 <>
-                                    <div className="flex items-center gap-3 px-4 py-2 bg-white/10 rounded-xl">
+                                    <button
+                                        onClick={() => navigate('/profile')}
+                                        className="flex items-center gap-3 px-4 py-2 bg-white/10 rounded-xl hover:bg-white/20 transition-all"
+                                    >
                                         <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
                                             <span className="text-white font-bold text-sm">
                                                 {user.username.charAt(0).toUpperCase()}
@@ -329,7 +332,7 @@ const Welcome = () => {
                                             <p className="text-white font-medium text-sm">{user.username}</p>
                                             <p className="text-slate-400 text-xs">{user.role}</p>
                                         </div>
-                                    </div>
+                                    </button>
                                     <button
                                         onClick={() => navigate('/logout')}
                                         className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 font-bold rounded-xl transition-all text-sm"
