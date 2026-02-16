@@ -83,10 +83,12 @@ if (!SECRET && process.env.NODE_ENV === 'production') {
   process.exit(1);
 }
 
-// --- HEALTH CHECK / ROOT ROUTE ---
-app.get('/', (req, res) => {
-  res.send('Teen Patti Ledger Backend is running!');
-});
+// --- HEALTH CHECK / ROOT ROUTE (only in development) ---
+if (process.env.NODE_ENV !== 'production') {
+  app.get('/', (req, res) => {
+    res.send('Teen Patti Ledger Backend is running!');
+  });
+}
 
 // Helper to get user from Token (Cookie or Header)
 const getUserFromRequest = (req) => {
