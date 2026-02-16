@@ -5,6 +5,9 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const { z } = require('zod');
 const { PrismaClient } = require('@prisma/client');
 const { PrismaPg } = require('@prisma/adapter-pg');
 const { Pool } = require('pg');
@@ -27,8 +30,6 @@ const prisma = new PrismaClient({ adapter });
 const CLIENT_URL = process.env.CLIENT_URL || "https://teen-patti-client.onrender.com";
 const ALLOWED_ORIGINS = [
   CLIENT_URL,
-  "https://teen-patti-client.onrender.com",
-  "https://teen-patti-app.onrender.com",
   "http://localhost:3000",
   "http://localhost:5173",
   "http://localhost:5174",
@@ -37,12 +38,38 @@ const ALLOWED_ORIGINS = [
   "http://127.0.0.1:5174"
 ];
 
-app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev')); // Log requests to console
+// Security middleware
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "ws:", "wss:"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: { error: 'Too many requests, please try again later.' }
+});
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // limit each IP to 5 login attempts per windowMs
+  message: { error: 'Too many login attempts, please try again later.' }
+});
+
+app.use(limiter);
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    if (ALLOWED_ORIGINS.includes(origin) || origin.endsWith('.onrender.com') || origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) {
+    if (ALLOWED_ORIGINS.includes(origin) || (process.env.NODE_ENV !== 'production' && origin.startsWith('http://localhost'))) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
@@ -50,7 +77,7 @@ app.use(cors({
   },
   credentials: true
 }));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
 
 // DEBUG MIDDLEWARE (only in development)
@@ -67,7 +94,7 @@ const io = new Server(server, {
   cors: {
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
-      if (ALLOWED_ORIGINS.includes(origin) || origin.endsWith('.onrender.com') || origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) {
+      if (ALLOWED_ORIGINS.includes(origin) || (process.env.NODE_ENV !== 'production' && origin.startsWith('http://localhost'))) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));
@@ -77,18 +104,41 @@ const io = new Server(server, {
   }
 });
 
+// Input validation schemas
+const loginSchema = z.object({
+  username: z.string().min(3).max(50).regex(/^[a-zA-Z0-9_]+$/),
+  password: z.string().min(8).max(100)
+});
+
+const setupSchema = z.object({
+  setupKey: z.string().min(10),
+  username: z.string().min(3).max(50).regex(/^[a-zA-Z0-9_]+$/),
+  password: z.string().min(8).max(100)
+});
+
+const sessionSchema = z.object({
+  name: z.string().min(3).max(100),
+  totalRounds: z.number().int().min(1).max(50),
+  players: z.array(z.object({
+    name: z.string().min(1).max(50),
+    seatPosition: z.number().int().min(1).max(6).optional()
+  })).min(2).max(6)
+});
+
 const SECRET = process.env.JWT_SECRET;
 if (!SECRET && process.env.NODE_ENV === 'production') {
   console.error('FATAL: JWT_SECRET environment variable is required in production');
   process.exit(1);
 }
 
-// --- HEALTH CHECK / ROOT ROUTE (only in development) ---
-if (process.env.NODE_ENV !== 'production') {
-  app.get('/', (req, res) => {
-    res.send('Teen Patti Ledger Backend is running!');
+// --- HEALTH CHECK ENDPOINT ---
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
   });
-}
+});
 
 // Helper to get user from Token (Cookie or Header)
 const getUserFromRequest = (req) => {
@@ -107,46 +157,103 @@ const getUserFromRequest = (req) => {
   }
 };
 
-// 1. LOGIN API
-app.post('/api/auth/login', async (req, res) => {
-  const { username, password } = req.body;
+// Authorization middleware
+const requireAuth = (req, res, next) => {
+  const user = getUserFromRequest(req);
+  if (!user) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  req.user = user;
+  next();
+};
 
-  // First Run: Auto-create Admin if no users exist
-  const userCount = await prisma.user.count();
-  if (userCount === 0) {
-    if (username === 'admin' && password === 'admin123') {
-      const hashed = bcrypt.hashSync('admin123', 10);
-      const admin = await prisma.user.create({ data: { username: 'admin', password: hashed, role: 'ADMIN' } });
-      const token = jwt.sign({ id: admin.id, role: admin.role }, SECRET);
-      const isProduction = process.env.NODE_ENV === 'production' || (process.env.CLIENT_URL && process.env.CLIENT_URL.includes('onrender'));
-      res.cookie('token', token, {
-        httpOnly: true,
-        secure: isProduction,
-        sameSite: isProduction ? 'none' : 'lax',
-        maxAge: 24 * 60 * 60 * 1000
-      });
-      return res.json({ success: true, user: { username: admin.username, role: admin.role } });
-    } else {
-      return res.status(401).json({ error: 'System not initialized. Login as admin/admin123' });
+const requireAdmin = (req, res, next) => {
+  const user = getUserFromRequest(req);
+  if (!user || user.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  req.user = user;
+  next();
+};
+
+const requireOperator = (req, res, next) => {
+  const user = getUserFromRequest(req);
+  if (!user || (user.role !== 'OPERATOR' && user.role !== 'ADMIN')) {
+    return res.status(403).json({ error: 'Operator access required' });
+  }
+  req.user = user;
+  next();
+};
+
+// 1. SETUP API - Create first admin user (only when no users exist)
+app.post('/api/auth/setup', authLimiter, async (req, res) => {
+  try {
+    const userCount = await prisma.user.count();
+    if (userCount > 0) {
+      return res.status(400).json({ error: 'System already initialized' });
     }
+
+    const { setupKey, username, password } = setupSchema.parse(req.body);
+
+    if (setupKey !== process.env.ADMIN_SETUP_KEY) {
+      return res.status(401).json({ error: 'Invalid setup key' });
+    }
+
+    const hashed = await bcrypt.hash(password, 12);
+    const admin = await prisma.user.create({
+      data: { username, password: hashed, role: 'ADMIN' }
+    });
+
+    const token = jwt.sign({ id: admin.id, role: admin.role }, SECRET, { expiresIn: '8h' });
+    const isProduction = process.env.NODE_ENV === 'production';
+
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax',
+      maxAge: 8 * 60 * 60 * 1000, // 8 hours
+      path: '/'
+    });
+
+    return res.json({ success: true, user: { username: admin.username, role: admin.role } });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid input', details: error.errors });
+    }
+    console.error('Setup error:', error);
+    return res.status(500).json({ error: 'Setup failed' });
   }
+});
 
-  const user = await prisma.user.findUnique({ where: { username } });
-  if (!user || !bcrypt.compareSync(password, user.password)) {
-    return res.status(401).json({ error: 'Invalid login' });
+// 2. LOGIN API
+app.post('/api/auth/login', authLimiter, async (req, res) => {
+  try {
+    const { username, password } = loginSchema.parse(req.body);
+
+    const user = await prisma.user.findUnique({ where: { username } });
+    if (!user || !await bcrypt.compare(password, user.password)) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const token = jwt.sign({ id: user.id, role: user.role }, SECRET, { expiresIn: '8h' });
+    const isProduction = process.env.NODE_ENV === 'production';
+
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax',
+      maxAge: 8 * 60 * 60 * 1000,
+      path: '/'
+    });
+
+    res.json({ success: true, user: { username: user.username, role: user.role } });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid input', details: error.errors });
+    }
+    console.error('Login error:', error);
+    return res.status(500).json({ error: 'Login failed' });
   }
-
-  const token = jwt.sign({ id: user.id, role: user.role }, SECRET);
-  const isProduction = process.env.NODE_ENV === 'production' || (process.env.CLIENT_URL && process.env.CLIENT_URL.includes('onrender'));
-
-  res.cookie('token', token, {
-    httpOnly: true,
-    secure: isProduction,
-    sameSite: isProduction ? 'none' : 'lax',
-    maxAge: 24 * 60 * 60 * 1000
-  });
-
-  res.json({ success: true, user: { username: user.username, role: user.role }, token }); // Return token for client-side storage
 });
 
 // 1.5 CHECK SESSION API (Persist Login)
@@ -167,8 +274,8 @@ app.post('/api/auth/logout', (req, res) => {
   res.json({ success: true });
 });
 
-// 2. SAVE GAME API
-app.post('/api/games/hand', async (req, res) => {
+// 2. SAVE GAME API (requires authentication)
+app.post('/api/games/hand', requireAuth, async (req, res) => {
   const { winner, pot, logs, netChanges, sessionName } = req.body;
 
   try {
@@ -267,8 +374,8 @@ app.get('/api/sessions/active', (req, res) => {
   res.json(activeList);
 });
 
-// 3. ADMIN API
-app.get('/api/admin/sessions', async (req, res) => {
+// 3. ADMIN API (requires admin authentication)
+app.get('/api/admin/sessions', requireAdmin, async (req, res) => {
   const sessions = await prisma.gameSession.findMany({
     orderBy: { createdAt: 'desc' },
     include: { _count: { select: { hands: true } } }
@@ -276,31 +383,15 @@ app.get('/api/admin/sessions', async (req, res) => {
   res.json(sessions);
 });
 
-app.get('/api/admin/users', async (req, res) => {
+app.get('/api/admin/users', requireAdmin, async (req, res) => {
   const users = await prisma.user.findMany({
     select: { id: true, username: true, role: true, createdAt: true }
   });
   res.json(users);
 });
 
-app.post('/api/admin/users', async (req, res) => {
-  console.log("--- [DEBUG] Create User Request ---");
-  console.log("Headers:", JSON.stringify(req.headers));
-
-  const decoded = getUserFromRequest(req);
-  if (!decoded) {
-    console.log("[DEBUG] No valid token found");
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-
+app.post('/api/admin/users', requireAdmin, async (req, res) => {
   try {
-    console.log("[DEBUG] Token Decoded:", decoded);
-
-    if (decoded.role !== 'ADMIN') {
-      console.log("[DEBUG] Role mismatch:", decoded.role);
-      return res.status(403).json({ error: "Only Admins can create users" });
-    }
-
     const { username, password, role } = req.body;
 
     // Validate Role
@@ -309,7 +400,7 @@ app.post('/api/admin/users', async (req, res) => {
       return res.status(400).json({ error: "Invalid role" });
     }
 
-    const hashed = bcrypt.hashSync(password, 10);
+    const hashed = await bcrypt.hash(password, 12);
     const user = await prisma.user.create({
       data: { username, password: hashed, role }
     });
@@ -318,7 +409,7 @@ app.post('/api/admin/users', async (req, res) => {
     if (role === 'PLAYER') {
       await prisma.player.create({
         data: {
-          name: username, // Default player name to username
+          name: username,
           userId: user.id
         }
       });
@@ -331,19 +422,12 @@ app.post('/api/admin/users', async (req, res) => {
   }
 });
 
-app.delete('/api/admin/users/:id', async (req, res) => {
-  const decoded = getUserFromRequest(req);
-  if (!decoded) return res.status(401).json({ error: "Unauthorized" });
-
+app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
   try {
-    if (decoded.role !== 'ADMIN') {
-      return res.status(403).json({ error: "Only Admins can delete users" });
-    }
-
     const { id } = req.params;
-    // Prevent deleting self or super admin
-    if (parseInt(id) === decoded.id || parseInt(id) === 1) {
-      return res.status(400).json({ error: "Cannot delete yourself or Super Admin" });
+    // Prevent deleting self
+    if (parseInt(id) === req.user.id) {
+      return res.status(400).json({ error: "Cannot delete yourself" });
     }
 
     // Delete associated player first if exists
@@ -357,13 +441,7 @@ app.delete('/api/admin/users/:id', async (req, res) => {
   }
 });
 
-app.post('/api/admin/sessions/:name/end', async (req, res) => {
-  // Allow Operators and Admins to end sessions
-  const decoded = getUserFromRequest(req);
-  if (!decoded || (decoded.role !== 'ADMIN' && decoded.role !== 'OPERATOR')) {
-    return res.status(403).json({ error: "Unauthorized" });
-  }
-
+app.post('/api/admin/sessions/:name/end', requireOperator, async (req, res) => {
   const { name } = req.params;
   try {
     const session = await prisma.gameSession.findUnique({ where: { name } });
@@ -388,12 +466,7 @@ app.post('/api/admin/sessions/:name/end', async (req, res) => {
 });
 
 // Get session details with hands
-app.get('/api/admin/sessions/:name', async (req, res) => {
-  const decoded = getUserFromRequest(req);
-  if (!decoded || (decoded.role !== 'ADMIN' && decoded.role !== 'OPERATOR')) {
-    return res.status(403).json({ error: "Unauthorized" });
-  }
-
+app.get('/api/admin/sessions/:name', requireOperator, async (req, res) => {
   const { name } = req.params;
   try {
     const session = await prisma.gameSession.findUnique({
@@ -416,12 +489,7 @@ app.get('/api/admin/sessions/:name', async (req, res) => {
 });
 
 // Delete session and all related data
-app.delete('/api/admin/sessions/:name', async (req, res) => {
-  const decoded = getUserFromRequest(req);
-  if (!decoded || decoded.role !== 'ADMIN') {
-    return res.status(403).json({ error: "Only admins can delete sessions" });
-  }
-
+app.delete('/api/admin/sessions/:name', requireAdmin, async (req, res) => {
   const { name } = req.params;
   try {
     const session = await prisma.gameSession.findUnique({ where: { name } });
@@ -758,7 +826,30 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
+const httpServer = server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log("NODE_ENV:", process.env.NODE_ENV);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully');
+  httpServer.close(() => {
+    console.log('Server closed');
+    prisma.$disconnect().then(() => {
+      console.log('Database disconnected');
+      process.exit(0);
+    });
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT received, shutting down gracefully');
+  httpServer.close(() => {
+    console.log('Server closed');
+    prisma.$disconnect().then(() => {
+      console.log('Database disconnected');
+      process.exit(0);
+    });
+  });
 });
