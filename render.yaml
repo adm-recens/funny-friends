@@ -10,7 +10,7 @@ services:
       - key: POSTGRES_PASSWORD
         generateValue: true
       - key: POSTGRES_DB
-        value: funnyfriends
+        value: funny_friends_db
     disk:
       name: postgres-data
       mountPath: /var/lib/postgresql/data
