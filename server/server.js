@@ -30,6 +30,7 @@ const prisma = new PrismaClient({ adapter });
 const CLIENT_URL = process.env.CLIENT_URL || "https://teen-patti-client.onrender.com";
 const ALLOWED_ORIGINS = [
   CLIENT_URL,
+  "https://funny-friends.onrender.com",
   "http://localhost:3000",
   "http://localhost:5173",
   "http://localhost:5174",
@@ -68,10 +69,19 @@ app.use(limiter);
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(cors({
   origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps, curl, or same-origin)
     if (!origin) return callback(null, true);
-    if (ALLOWED_ORIGINS.includes(origin) || (process.env.NODE_ENV !== 'production' && origin.startsWith('http://localhost'))) {
+    
+    // Allow same-origin requests (for static files)
+    if (process.env.NODE_ENV === 'production' && origin.includes('onrender.com')) {
+      return callback(null, true);
+    }
+    
+    // Check against allowed origins list
+    if (ALLOWED_ORIGINS.includes(origin) || origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) {
       callback(null, true);
     } else {
+      console.error(`CORS rejected origin: ${origin}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
