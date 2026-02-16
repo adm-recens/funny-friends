@@ -250,20 +250,36 @@ const Welcome = () => {
                         <div className="text-center mb-8">
                             <div className="text-6xl mb-4">♠</div>
                             <h1 className="text-3xl font-black text-slate-900 mb-2">Teen Patti</h1>
-                            <p className="text-slate-500">Choose how you want to join the game</p>
+                            <p className="text-slate-500">
+                                {user ? `Welcome, ${user.username}! Choose an option:` : 'Choose how you want to join the game'}
+                            </p>
                         </div>
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <button 
-                                onClick={() => setViewMode('operator')}
-                                className="group p-6 bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-2xl hover:border-purple-400 transition-all text-left"
-                            >
-                                <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-pink-600 rounded-xl mb-4 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                                    <Users className="text-white" size={24} />
-                                </div>
-                                <h3 className="text-xl font-bold text-slate-900 mb-2">Operator</h3>
-                                <p className="text-slate-500 text-sm">Create and manage game sessions</p>
-                            </button>
+                            {/* Show Create Session for logged in users, Operator login for guests */}
+                            {user ? (
+                                <button 
+                                    onClick={() => navigate('/setup')}
+                                    className="group p-6 bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-2xl hover:border-purple-400 transition-all text-left"
+                                >
+                                    <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-pink-600 rounded-xl mb-4 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                        <Users className="text-white" size={24} />
+                                    </div>
+                                    <h3 className="text-xl font-bold text-slate-900 mb-2">Create Session</h3>
+                                    <p className="text-slate-500 text-sm">Start a new game session</p>
+                                </button>
+                            ) : (
+                                <button 
+                                    onClick={() => setViewMode('operator')}
+                                    className="group p-6 bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-2xl hover:border-purple-400 transition-all text-left"
+                                >
+                                    <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-pink-600 rounded-xl mb-4 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                        <Users className="text-white" size={24} />
+                                    </div>
+                                    <h3 className="text-xl font-bold text-slate-900 mb-2">Operator</h3>
+                                    <p className="text-slate-500 text-sm">Create and manage game sessions</p>
+                                </button>
+                            )}
                             
                             <button 
                                 onClick={() => setViewMode('viewer')}
@@ -301,20 +317,33 @@ const Welcome = () => {
                         </div>
                         
                         <div className="flex items-center gap-4">
-                            <button
-                                onClick={() => navigate('/login')}
-                                className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl transition-all"
-                            >
-                                <Shield size={18} />
-                                Admin Login
-                            </button>
-                            
-                            {user && (
+                            {user ? (
+                                <>
+                                    <div className="flex items-center gap-3 px-4 py-2 bg-white/10 rounded-xl">
+                                        <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
+                                            <span className="text-white font-bold text-sm">
+                                                {user.username.charAt(0).toUpperCase()}
+                                            </span>
+                                        </div>
+                                        <div className="text-left">
+                                            <p className="text-white font-medium text-sm">{user.username}</p>
+                                            <p className="text-slate-400 text-xs">{user.role}</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => navigate('/logout')}
+                                        className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 font-bold rounded-xl transition-all text-sm"
+                                    >
+                                        Logout
+                                    </button>
+                                </>
+                            ) : (
                                 <button
-                                    onClick={() => navigate('/logout')}
-                                    className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 font-bold rounded-xl transition-all text-sm"
+                                    onClick={() => navigate('/login')}
+                                    className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl transition-all"
                                 >
-                                    Logout
+                                    <Shield size={18} />
+                                    Admin Login
                                 </button>
                             )}
                         </div>
