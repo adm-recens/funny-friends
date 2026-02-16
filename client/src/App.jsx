@@ -15,6 +15,7 @@ import Viewer from './pages/Viewer';
 import Rummy from './pages/Rummy';
 import Setup from './pages/Setup';
 import Profile from './pages/Profile';
+import TeenPattiHelp from './pages/TeenPattiHelp';
 
 // Setup Check Component
 const SetupCheck = ({ children }) => {
@@ -84,6 +85,7 @@ const AppRoutes = () => {
       <Route path="/logout" element={<Logout />} />
       <Route path="/viewer/:sessionName" element={<Viewer />} />
       <Route path="/rummy" element={<Rummy />} />
+      <Route path="/help" element={<TeenPattiHelp />} />
 
       {/* Protected Routes - Any logged in user */}
       <Route

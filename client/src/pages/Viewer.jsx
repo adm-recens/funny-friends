@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { LogOut, Users, Trophy, Activity, ChevronLeft } from 'lucide-react';
+import { LogOut, Users, Trophy, Activity, ChevronLeft, HelpCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { API_URL } from '../config';
 
@@ -112,6 +112,12 @@ const Viewer = () => {
                     </div>
                     
                     <div className="flex items-center gap-4">
+                        <button
+                            onClick={() => navigate('/help')}
+                            className="flex items-center gap-2 px-4 py-2 text-slate-400 font-bold hover:bg-white/10 rounded-xl transition-colors"
+                        >
+                            <HelpCircle size={18} /> Help
+                        </button>
                         <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold ${
                             connectionStatus === 'Connected' ? 'bg-green-500/20 text-green-400' : 
                             connectionStatus === 'Session Ended' ? 'bg-red-500/20 text-red-400' :

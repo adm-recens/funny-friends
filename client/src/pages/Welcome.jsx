@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Users, Eye, Shield, LogOut, Heart, Gamepad2, Clock, ArrowRight, Wrench, Construction } from 'lucide-react';
+import { Sparkles, Users, Eye, Shield, LogOut, Heart, Gamepad2, Clock, ArrowRight, Wrench, Construction, HelpCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { API_URL } from '../config';
 
@@ -341,13 +341,22 @@ const Welcome = () => {
                                     </button>
                                 </>
                             ) : (
-                                <button
-                                    onClick={() => navigate('/login')}
-                                    className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl transition-all"
-                                >
-                                    <Shield size={18} />
-                                    Admin Login
-                                </button>
+                                <>
+                                    <button
+                                        onClick={() => navigate('/help')}
+                                        className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl transition-all"
+                                    >
+                                        <HelpCircle size={18} />
+                                        Help
+                                    </button>
+                                    <button
+                                        onClick={() => navigate('/login')}
+                                        className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl transition-all"
+                                    >
+                                        <Shield size={18} />
+                                        Admin Login
+                                    </button>
+                                </>
                             )}
                         </div>
                     </div>
