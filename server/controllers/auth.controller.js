@@ -132,7 +132,7 @@ async function getUserDashboardData(userId, role) {
       return {
         ...baseData,
         stats: { mySessions: operatorSessions, availableGames: activeGames },
-        redirectTo: '/dashboard',
+        redirectTo: '/operator-dashboard',
         availableActions: ['create-session', 'manage-sessions', 'view-sessions']
       };
 

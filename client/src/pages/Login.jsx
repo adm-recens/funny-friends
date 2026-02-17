@@ -7,8 +7,8 @@ import { API_URL } from '../config';
 const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
-  
+  const { user, login: useAuthLogin } = useAuth();
+
   const [credentials, setCredentials] = useState({ username: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -38,7 +38,7 @@ const Login = () => {
           setNeedsSetup(true);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const handleSubmit = async (e) => {
@@ -47,35 +47,22 @@ const Login = () => {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_URL}/api/v2/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(credentials),
-        credentials: 'include'
-      });
+      const result = await useAuthLogin(credentials.username, credentials.password);
 
-      const data = await res.json();
-
-      if (data.success) {
-        // Navigate based on role (returned from API)
-        if (data.user?.redirectTo) {
-          navigate(data.user.redirectTo);
+      if (result.success) {
+        // Navigate based on role (returned from API via context)
+        if (result.user?.redirectTo) {
+          navigate(result.user.redirectTo);
         } else {
           navigate('/');
         }
       } else {
-        if (data.needsSetup) {
+        if (result.details?.needsSetup) {
           navigate('/setup');
           return;
         }
-        
-        if (res.status === 423) {
-          setError(`${data.message} Try again in ${data.remainingMinutes} minutes.`);
-        } else if (data.details) {
-          setError(`${data.error}: ${data.details.join(', ')}`);
-        } else {
-          setError(data.error || 'Login failed. Please check your credentials.');
-        }
+
+        setError(result.error || 'Login failed. Please check your credentials.');
       }
     } catch (e) {
       setError('Network error. Please check your connection and try again.');
@@ -88,7 +75,7 @@ const Login = () => {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-purple-900 via-slate-900 to-black opacity-60"></div>
-        
+
         <div className="relative z-10 bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full text-center">
           <div className="w-16 h-16 bg-gradient-to-br from-purple-600 to-pink-600 rounded-2xl mx-auto mb-4 flex items-center justify-center">
             <Sparkles className="text-white" size={32} />
@@ -111,7 +98,7 @@ const Login = () => {
   return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-purple-900 via-slate-900 to-black opacity-60"></div>
-      
+
       <div className="relative z-10 w-full max-w-md">
         <button
           onClick={() => navigate('/')}

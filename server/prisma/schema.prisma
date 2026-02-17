@@ -17,7 +17,7 @@ model User {
   createdAt DateTime @default(now())
   player    Player?
   sessions  UserSession[]
-  allowedGames UserGamePermission[] // Games this operator/admin can manage
+  allowedGames UserGamePermission[]
 }
 
 model GameType {

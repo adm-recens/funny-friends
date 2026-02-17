@@ -13,128 +13,25 @@ const AdminDashboard = () => {
     const [sessionDetails, setSessionDetails] = useState(null);
     const [showSessionModal, setShowSessionModal] = useState(false);
     const [showCreateUserModal, setShowCreateUserModal] = useState(false);
-    const [newUser, setNewUser] = useState({ username: '', password: '', role: '' });
-    const [createError, setCreateError] = useState('');
-    const [createSuccess, setCreateSuccess] = useState('');
-    const [loading, setLoading] = useState(true);
-    
-    // Player Addition Requests
-    const [playerRequests, setPlayerRequests] = useState([]);
-    const [requestsLoading, setRequestsLoading] = useState(false);
+    const [availableGames, setAvailableGames] = useState([]);
+    const [newUser, setNewUser] = useState({ username: '', password: '', role: '', allowedGames: [] });
 
-    const isAdmin = user?.role === 'ADMIN';
+    // ... existing useEffect ...
 
     useEffect(() => {
         if (!isAdmin) return;
-        fetchData();
-        fetchPlayerRequests();
+        fetchGameTypes();
     }, [isAdmin]);
 
-    const fetchData = async () => {
-        setLoading(true);
-
+    const fetchGameTypes = async () => {
         try {
-            const [sessionsRes, usersRes] = await Promise.all([
-                fetch(`${API_URL}/api/admin/sessions`, { credentials: 'include' }),
-                fetch(`${API_URL}/api/admin/users`, { credentials: 'include' })
-            ]);
-
-            if (sessionsRes.ok) {
-                const sessions = await sessionsRes.json();
-                setAdminSessions(sessions);
-            }
-
-            if (usersRes.ok) {
-                const users = await usersRes.json();
-                setAdminUsers(users);
-            }
-        } catch (e) {
-            console.error('Error fetching data:', e);
-        } finally {
-            setLoading(false);
-        }
-    };
-    
-    const fetchPlayerRequests = async () => {
-        try {
-            const res = await fetch(`${API_URL}/api/admin/player-requests`, {
-                credentials: 'include'
-            });
+            const res = await fetch(`${API_URL}/api/gametypes`, { credentials: 'include' });
             if (res.ok) {
-                const requests = await res.json();
-                setPlayerRequests(requests);
+                const games = await res.json();
+                setAvailableGames(games.filter(g => g.isActive));
             }
         } catch (e) {
-            console.error('Error fetching player requests:', e);
-        }
-    };
-    
-    const handleApprovePlayerRequest = async (requestId) => {
-        setRequestsLoading(true);
-        try {
-            const res = await fetch(`${API_URL}/api/admin/player-requests/${requestId}/resolve`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ approved: true }),
-                credentials: 'include'
-            });
-            
-            if (res.ok) {
-                await fetchPlayerRequests();
-                await fetchData(); // Refresh sessions to show new players
-            } else {
-                alert('Failed to approve request');
-            }
-        } catch (e) {
-            console.error(e);
-            alert('Error approving request');
-        } finally {
-            setRequestsLoading(false);
-        }
-    };
-    
-    const handleDeclinePlayerRequest = async (requestId) => {
-        setRequestsLoading(true);
-        try {
-            const res = await fetch(`${API_URL}/api/admin/player-requests/${requestId}/resolve`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ approved: false }),
-                credentials: 'include'
-            });
-            
-            if (res.ok) {
-                await fetchPlayerRequests();
-            } else {
-                alert('Failed to decline request');
-            }
-        } catch (e) {
-            console.error(e);
-            alert('Error declining request');
-        } finally {
-            setRequestsLoading(false);
-        }
-    };
-    
-    const handleApproveAllRequests = async (sessionName) => {
-        setRequestsLoading(true);
-        try {
-            const res = await fetch(`${API_URL}/api/admin/sessions/${sessionName}/approve-all-players`, {
-                method: 'POST',
-                credentials: 'include'
-            });
-            
-            if (res.ok) {
-                await fetchPlayerRequests();
-                await fetchData();
-            } else {
-                alert('Failed to approve all requests');
-            }
-        } catch (e) {
-            console.error(e);
-            alert('Error approving all requests');
-        } finally {
-            setRequestsLoading(false);
+            console.error('Error fetching game types:', e);
         }
     };
 
@@ -158,7 +55,7 @@ const AdminDashboard = () => {
 
             if (res.ok) {
                 setCreateSuccess('User created successfully!');
-                setNewUser({ username: '', password: '', role: '' });
+                setNewUser({ username: '', password: '', role: '', allowedGames: [] });
                 fetchData();
                 setTimeout(() => {
                     setShowCreateUserModal(false);
@@ -171,6 +68,17 @@ const AdminDashboard = () => {
         } catch (e) {
             setCreateError('Error creating user');
         }
+    };
+
+    const toggleGameSelection = (gameId) => {
+        setNewUser(prev => {
+            const current = prev.allowedGames || [];
+            if (current.includes(gameId)) {
+                return { ...prev, allowedGames: current.filter(id => id !== gameId) };
+            } else {
+                return { ...prev, allowedGames: [...current, gameId] };
+            }
+        });
     };
 
     const handleDeleteUser = async (userId) => {
@@ -259,8 +167,8 @@ const AdminDashboard = () => {
                 <div className="max-w-7xl mx-auto px-6 py-4">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
-                            <button 
-                                onClick={() => navigate('/')} 
+                            <button
+                                onClick={() => navigate('/')}
                                 className="p-2 hover:bg-slate-100 rounded-xl transition-colors"
                             >
                                 <ArrowLeft className="text-slate-600" size={24} />
@@ -270,21 +178,21 @@ const AdminDashboard = () => {
                                 <p className="text-sm text-slate-500">System Administration Panel</p>
                             </div>
                         </div>
-                        
+
                         <div className="flex items-center gap-3">
-                            <button 
+                            <button
                                 onClick={() => setShowCreateUserModal(true)}
                                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-all"
                             >
                                 <UserPlus size={18} /> Add User
                             </button>
-                            <button 
+                            <button
                                 onClick={() => navigate('/setup')}
                                 className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition-all"
                             >
                                 <Gamepad2 size={18} /> New Game
                             </button>
-                            <button 
+                            <button
                                 onClick={() => { logout(); navigate('/'); }}
                                 className="flex items-center gap-2 px-4 py-2 text-red-500 font-bold hover:bg-red-50 rounded-xl transition-colors"
                             >
@@ -351,7 +259,7 @@ const AdminDashboard = () => {
                         </div>
                     </div>
                 </div>
-                
+
                 {/* Player Addition Requests Section */}
                 {playerRequests.length > 0 && (
                     <div className="mb-8">
@@ -367,7 +275,7 @@ const AdminDashboard = () => {
                                     </div>
                                 </div>
                             </div>
-                            
+
                             <div className="space-y-3">
                                 {/* Group requests by session */}
                                 {Object.entries(
@@ -444,7 +352,7 @@ const AdminDashboard = () => {
                                     {activeSessions.length}
                                 </span>
                             </div>
-                            
+
                             {activeSessions.length === 0 ? (
                                 <div className="p-8 text-center text-slate-500">
                                     No active games running
@@ -464,14 +372,14 @@ const AdminDashboard = () => {
                                                     <span className="px-3 py-1 bg-green-100 text-green-600 text-xs font-bold rounded-full">
                                                         LIVE
                                                     </span>
-                                                    <button 
+                                                    <button
                                                         onClick={() => handleViewSession(session.name)}
                                                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                                         title="View"
                                                     >
                                                         <Eye size={18} />
                                                     </button>
-                                                    <button 
+                                                    <button
                                                         onClick={() => handleEndSession(session.name)}
                                                         className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                                         title="End"
@@ -499,7 +407,7 @@ const AdminDashboard = () => {
                                     {endedSessions.length}
                                 </span>
                             </div>
-                            
+
                             {endedSessions.length === 0 ? (
                                 <div className="p-8 text-center text-slate-500">
                                     No completed games
@@ -519,14 +427,14 @@ const AdminDashboard = () => {
                                                     <span className="px-3 py-1 bg-slate-100 text-slate-500 text-xs font-bold rounded-full">
                                                         ENDED
                                                     </span>
-                                                    <button 
+                                                    <button
                                                         onClick={() => handleViewSession(session.name)}
                                                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                                         title="View Results"
                                                     >
                                                         <Eye size={18} />
                                                     </button>
-                                                    <button 
+                                                    <button
                                                         onClick={() => handleDeleteSession(session.name)}
                                                         className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                                         title="Delete"
@@ -552,7 +460,7 @@ const AdminDashboard = () => {
                                 <h2 className="text-lg font-bold text-slate-900">Registered Users</h2>
                             </div>
                         </div>
-                        
+
                         <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
                             {adminUsers.map(u => (
                                 <div key={u.id} className="p-4 hover:bg-slate-50 transition-colors">
@@ -563,17 +471,16 @@ const AdminDashboard = () => {
                                             </div>
                                             <div>
                                                 <p className="font-bold text-slate-900">{u.username}</p>
-                                                <span className={`text-xs px-2 py-0.5 rounded font-medium ${
-                                                    u.role === 'ADMIN' ? 'bg-red-100 text-red-600' :
+                                                <span className={`text-xs px-2 py-0.5 rounded font-medium ${u.role === 'ADMIN' ? 'bg-red-100 text-red-600' :
                                                     u.role === 'OPERATOR' ? 'bg-blue-100 text-blue-600' :
-                                                    'bg-slate-100 text-slate-600'
-                                                }`}>
+                                                        'bg-slate-100 text-slate-600'
+                                                    }`}>
                                                     {u.role}
                                                 </span>
                                             </div>
                                         </div>
                                         {u.id !== user.id && u.id !== 1 && (
-                                            <button 
+                                            <button
                                                 onClick={() => handleDeleteUser(u.id)}
                                                 className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                                             >
@@ -602,7 +509,7 @@ const AdminDashboard = () => {
                                     <p className="text-sm text-slate-500">Create operator or admin account</p>
                                 </div>
                             </div>
-                            <button 
+                            <button
                                 onClick={() => setShowCreateUserModal(false)}
                                 className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
                             >
@@ -622,7 +529,7 @@ const AdminDashboard = () => {
                                     required
                                 />
                             </div>
-                            
+
                             <div>
                                 <label className="block text-sm font-bold text-slate-700 mb-2">Password</label>
                                 <input
@@ -634,7 +541,7 @@ const AdminDashboard = () => {
                                     required
                                 />
                             </div>
-                            
+
                             <div>
                                 <label className="block text-sm font-bold text-slate-700 mb-2">Role</label>
                                 <select
@@ -649,6 +556,33 @@ const AdminDashboard = () => {
                                 </select>
                             </div>
 
+                            {/* Game Access Selection */}
+                            {(newUser.role === 'OPERATOR' || newUser.role === 'ADMIN') && (
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-700 mb-2">Allowed Games</label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {availableGames.map(game => (
+                                            <div
+                                                key={game.id}
+                                                onClick={() => toggleGameSelection(game.id)}
+                                                className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-2 ${newUser.allowedGames?.includes(game.id)
+                                                        ? 'border-blue-500 bg-blue-50'
+                                                        : 'border-slate-200 hover:border-slate-300'
+                                                    }`}
+                                            >
+                                                <div className={`w-5 h-5 rounded border flex items-center justify-center ${newUser.allowedGames?.includes(game.id)
+                                                        ? 'bg-blue-500 border-blue-500'
+                                                        : 'border-slate-300 bg-white'
+                                                    }`}>
+                                                    {newUser.allowedGames?.includes(game.id) && <CheckCircle size={14} className="text-white" />}
+                                                </div>
+                                                <span className="font-bold text-sm text-slate-700">{game.name}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             {createError && (
                                 <div className="flex items-center gap-2 p-3 bg-red-50 text-red-600 rounded-xl text-sm">
                                     <AlertCircle size={16} />
@@ -662,16 +596,16 @@ const AdminDashboard = () => {
                                     {createSuccess}
                                 </div>
                             )}
-                            
+
                             <div className="flex gap-3 pt-2">
-                                <button 
+                                <button
                                     type="button"
                                     onClick={() => setShowCreateUserModal(false)}
                                     className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors"
                                 >
                                     Cancel
                                 </button>
-                                <button 
+                                <button
                                     type="submit"
                                     className="flex-1 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors"
                                 >
@@ -694,14 +628,14 @@ const AdminDashboard = () => {
                                     {new Date(sessionDetails.createdAt).toLocaleString()} • {sessionDetails.totalRounds} Rounds
                                 </p>
                             </div>
-                            <button 
+                            <button
                                 onClick={() => setShowSessionModal(false)}
                                 className="p-2 bg-white border border-slate-200 hover:bg-slate-100 rounded-lg transition-colors"
                             >
                                 <X size={24} className="text-slate-600" />
                             </button>
                         </div>
-                        
+
                         <div className="p-6 overflow-y-auto max-h-[60vh]">
                             {/* Pending Player Requests */}
                             {sessionDetails.playerRequests?.filter(r => r.status === 'PENDING').length > 0 && (
@@ -755,9 +689,8 @@ const AdminDashboard = () => {
                                     {sessionDetails.players?.map(player => (
                                         <div key={player.id} className="bg-slate-50 p-3 rounded-xl flex justify-between items-center border border-slate-100">
                                             <span className="font-medium text-slate-800">{player.name}</span>
-                                            <span className={`text-xs px-2 py-1 rounded font-bold ${
-                                                player.sessionBalance >= 0 ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
-                                            }`}>
+                                            <span className={`text-xs px-2 py-1 rounded font-bold ${player.sessionBalance >= 0 ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
+                                                }`}>
                                                 {player.sessionBalance >= 0 ? '+' : ''}{player.sessionBalance}
                                             </span>
                                         </div>
@@ -768,10 +701,10 @@ const AdminDashboard = () => {
                             {/* Game Hands */}
                             <div>
                                 <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2">
-                                    <Gamepad2 size={18} className="text-yellow-500" /> 
+                                    <Gamepad2 size={18} className="text-yellow-500" />
                                     Game Results ({sessionDetails.hands?.length || 0} hands)
                                 </h3>
-                                
+
                                 {sessionDetails.hands?.length === 0 ? (
                                     <p className="text-slate-500 text-center py-8">No hands recorded for this session</p>
                                 ) : (
@@ -802,9 +735,9 @@ const AdminDashboard = () => {
                                 )}
                             </div>
                         </div>
-                        
+
                         <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-center">
-                            <button 
+                            <button
                                 onClick={() => setShowSessionModal(false)}
                                 className="px-8 py-3 bg-slate-800 text-white font-bold rounded-xl hover:bg-slate-700 transition-colors flex items-center gap-2"
                             >
