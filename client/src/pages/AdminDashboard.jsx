@@ -16,6 +16,11 @@ const AdminDashboard = () => {
     const [availableGames, setAvailableGames] = useState([]);
     const [newUser, setNewUser] = useState({ username: '', password: '', role: '', allowedGames: [] });
 
+    // System Reset
+    const [showResetModal, setShowResetModal] = useState(false);
+    const [setupKey, setSetupKey] = useState('');
+    const [resetLoading, setResetLoading] = useState(false);
+
     // ... existing useEffect ...
 
     useEffect(() => {
@@ -32,6 +37,35 @@ const AdminDashboard = () => {
             }
         } catch (e) {
             console.error('Error fetching game types:', e);
+        }
+    };
+
+    const handleResetDatabase = async (e) => {
+        e.preventDefault();
+        setResetLoading(true);
+        try {
+            const res = await fetch(`${API_URL}/api/setup/reset`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ setupKey }),
+                credentials: 'include'
+            });
+
+            if (res.ok) {
+                alert('System reset successful. Redirecting to setup...');
+                await logout();
+                navigate('/setup');
+            } else {
+                const data = await res.json();
+                alert(data.error || 'Reset failed');
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Error resetting system');
+        } finally {
+            setResetLoading(false);
+            setShowResetModal(false);
+            setSetupKey('');
         }
     };
 
@@ -493,6 +527,22 @@ const AdminDashboard = () => {
                         </div>
                     </div>
                 </div>
+                {/* Danger Zone */}
+                <div className="bg-red-50 border-2 border-red-100 rounded-3xl p-6 md:p-8 mt-12">
+                    <h2 className="text-xl font-bold text-red-800 flex items-center gap-2 mb-4">
+                        <AlertCircle className="text-red-600" />
+                        Danger Zone
+                    </h2>
+                    <p className="text-red-600/80 mb-6 max-w-2xl">
+                        These actions are destructive and cannot be undone. Please be certain before proceeding.
+                    </p>
+                    <button
+                        onClick={() => setShowResetModal(true)}
+                        className="px-6 py-3 bg-white border-2 border-red-200 text-red-600 font-bold rounded-xl hover:bg-red-600 hover:text-white hover:border-red-600 transition-all shadow-sm"
+                    >
+                        Reset System Database
+                    </button>
+                </div>
             </main>
 
             {/* Create User Modal */}
@@ -566,13 +616,13 @@ const AdminDashboard = () => {
                                                 key={game.id}
                                                 onClick={() => toggleGameSelection(game.id)}
                                                 className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-2 ${newUser.allowedGames?.includes(game.id)
-                                                        ? 'border-blue-500 bg-blue-50'
-                                                        : 'border-slate-200 hover:border-slate-300'
+                                                    ? 'border-blue-500 bg-blue-50'
+                                                    : 'border-slate-200 hover:border-slate-300'
                                                     }`}
                                             >
                                                 <div className={`w-5 h-5 rounded border flex items-center justify-center ${newUser.allowedGames?.includes(game.id)
-                                                        ? 'bg-blue-500 border-blue-500'
-                                                        : 'border-slate-300 bg-white'
+                                                    ? 'bg-blue-500 border-blue-500'
+                                                    : 'border-slate-300 bg-white'
                                                     }`}>
                                                     {newUser.allowedGames?.includes(game.id) && <CheckCircle size={14} className="text-white" />}
                                                 </div>
@@ -744,6 +794,59 @@ const AdminDashboard = () => {
                                 <X size={18} /> Close
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+            {/* Reset Confirmation Modal */}
+            {showResetModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                    <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border-2 border-slate-100 animate-in fade-in zoom-in duration-200">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-2xl font-bold text-slate-800">Confirm System Reset</h2>
+                            <button onClick={() => setShowResetModal(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500">
+                                <X size={24} />
+                            </button>
+                        </div>
+
+                        <div className="mb-6 p-4 bg-red-50 text-red-700 rounded-xl flex items-start gap-3">
+                            <AlertCircle className="shrink-0 mt-0.5" size={20} />
+                            <p className="text-sm font-medium">
+                                Warning: This will delete ALL users, game sessions, and player data permanently. The system will return to the initial setup state.
+                            </p>
+                        </div>
+
+                        <form onSubmit={handleResetDatabase} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-bold text-slate-700 mb-2">
+                                    Admin Setup Key
+                                </label>
+                                <input
+                                    type="password"
+                                    value={setupKey}
+                                    onChange={(e) => setSetupKey(e.target.value)}
+                                    placeholder="Enter setup key to confirm"
+                                    className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl font-bold text-slate-900 focus:border-red-500 focus:bg-white outline-none transition-all"
+                                    required
+                                />
+                            </div>
+
+                            <div className="flex gap-3 pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowResetModal(false)}
+                                    className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={resetLoading || !setupKey}
+                                    className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 shadow-lg shadow-red-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {resetLoading ? 'Resetting...' : 'Confirm Reset'}
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}
