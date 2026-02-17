@@ -30,10 +30,9 @@ const Welcome = () => {
             if (user.role === 'ADMIN') {
                 navigate('/admin');
             } else if (user.role === 'OPERATOR') {
-                navigate('/dashboard');
-            } else if (user.role === 'PLAYER') {
-                navigate('/player');
+                navigate('/operator-dashboard');
             }
+            // PLAYER and GUEST stay on Welcome page to select games
         }
     }, [user, navigate]);
 

@@ -1145,25 +1145,9 @@ app.post('/api/games/hand', requireAuth, async (req, res) => {
       });
     }
 
-    // Check if this was the final round BEFORE incrementing
+    // Get current round from session - GameManager handles round increment
     const currentRound = session.currentRound;
     const isSessionOver = currentRound >= session.totalRounds;
-
-    let nextRound = currentRound;
-    if (!isSessionOver) {
-      // Only increment if session is not over
-      const updatedSession = await prisma.gameSession.update({
-        where: { id: session.id },
-        data: { currentRound: { increment: 1 } }
-      });
-      nextRound = updatedSession.currentRound;
-    }
-
-    // Update in-memory manager's round as well
-    const manager = activeSessions.get(sessionName);
-    if (manager && !isSessionOver) {
-      manager.currentRound = nextRound;
-    }
 
     if (isSessionOver) {
       await prisma.gameSession.update({
@@ -1184,10 +1168,10 @@ app.post('/api/games/hand', requireAuth, async (req, res) => {
       winner,
       pot,
       netChanges,
-      currentRound: nextRound,
+      currentRound,
       isSessionOver
     });
-    res.json({ success: true, currentRound: nextRound, isSessionOver });
+    res.json({ success: true, currentRound, isSessionOver });
 
   } catch (e) {
     console.error(e);
@@ -1666,86 +1650,10 @@ app.post('/api/sessions', requireAuth, asyncHandler(async (req, res) => {
     }
   }
 
-  // Initialize in-memory state if not present
-  if (!activeSessions.has(name)) {
-    // Fetch players from DB to populate state
-    const dbPlayers = await prisma.player.findMany({ where: { sessionId: session.id } });
-    const initialPlayers = dbPlayers.map(p => ({
-      id: p.id,
-      name: p.name,
-      sessionBalance: p.sessionBalance,
-      seat: p.seatPosition
-    }));
-
-    // Create GameManager instance
-    const manager = new GameManager(session.id, name, session.totalRounds);
-    manager.currentRound = session.currentRound || 1; // Default to 1 for new sessions
-    manager.setPlayers(initialPlayers);
-
-    console.log(`[DEBUG] Session ${name} initialized with ${initialPlayers.length} players:`, initialPlayers);
-
-    // Hook up events
-    manager.on('state_change', (state) => {
-      io.to(name).emit('game_update', state);
-    });
-    manager.on('session_ended', async (data) => {
-      // Mark session as inactive in database
-      try {
-        await prisma.gameSession.update({
-          where: { name },
-          data: { isActive: false }
-        });
-        console.log(`[DEBUG] Session ${name} marked as complete`);
-      } catch (e) {
-        console.error('[ERROR] Failed to mark session as complete:', e);
-      }
-
-      io.to(name).emit('session_ended', data);
-      activeSessions.delete(name);
-    });
-    manager.on('hand_complete', async (summary) => {
-      // Save hand to database
-      try {
-        const session = await prisma.gameSession.findUnique({ where: { name } });
-        if (session) {
-          // Save hand history
-          const logsData = process.env.DATABASE_URL?.includes('sqlite') ? JSON.stringify([]) : [];
-          await prisma.gameHand.create({
-            data: {
-              winner: summary.winner.name,
-              potSize: summary.pot,
-              logs: logsData,
-              sessionId: session.id
-            }
-          });
-
-          // Update player balances
-          for (const [playerId, change] of Object.entries(summary.netChanges)) {
-            const pid = parseInt(playerId);
-            await prisma.player.upsert({
-              where: { id: pid },
-              update: { sessionBalance: { increment: change } },
-              create: {
-                name: "Player " + pid,
-                userId: null,
-                sessionId: session.id,
-                seatPosition: 0,
-                sessionBalance: change
-              }
-            });
-          }
-        }
-      } catch (e) {
-        console.error('[ERROR] Failed to save hand:', e);
-      }
-      io.to(name).emit('game_update', { type: 'HAND_COMPLETE', ...summary });
-    });
-
-    activeSessions.set(name, manager);
-    console.log(`Initialized GameManager for session ${name}`);
-  }
-
   res.json({ success: true, session });
+  
+  // Note: GameManager is created lazily when first user joins via socket
+  // This prevents duplicate manager creation and ensures single source of truth
 }));
 
 // 5. REAL-TIME SOCKET

@@ -15,6 +15,10 @@ const AdminDashboard = () => {
     const [showCreateUserModal, setShowCreateUserModal] = useState(false);
     const [availableGames, setAvailableGames] = useState([]);
     const [newUser, setNewUser] = useState({ username: '', password: '', role: '', allowedGames: [] });
+    const [createError, setCreateError] = useState('');
+    const [createSuccess, setCreateSuccess] = useState('');
+    const [playerRequests, setPlayerRequests] = useState([]);
+    const [requestsLoading, setRequestsLoading] = useState(false);
 
     // System Reset
     const [showResetModal, setShowResetModal] = useState(false);
@@ -26,6 +30,7 @@ const AdminDashboard = () => {
     useEffect(() => {
         if (!isAdmin) return;
         fetchGameTypes();
+        fetchData();
     }, [isAdmin]);
 
     const fetchGameTypes = async () => {
@@ -113,6 +118,91 @@ const AdminDashboard = () => {
                 return { ...prev, allowedGames: [...current, gameId] };
             }
         });
+    };
+
+    const handleApprovePlayerRequest = async (requestId) => {
+        setRequestsLoading(true);
+        try {
+            const res = await fetch(`${API_URL}/api/admin/player-requests/${requestId}/approve`, {
+                method: 'POST',
+                credentials: 'include'
+            });
+            if (res.ok) {
+                setPlayerRequests(prev => prev.filter(r => r.id !== requestId));
+                fetchData();
+            } else {
+                console.error('Failed to approve request');
+            }
+        } catch (e) {
+            console.error('Error approving request:', e);
+        } finally {
+            setRequestsLoading(false);
+        }
+    };
+
+    const handleDeclinePlayerRequest = async (requestId) => {
+        setRequestsLoading(true);
+        try {
+            const res = await fetch(`${API_URL}/api/admin/player-requests/${requestId}/decline`, {
+                method: 'POST',
+                credentials: 'include'
+            });
+            if (res.ok) {
+                setPlayerRequests(prev => prev.filter(r => r.id !== requestId));
+            } else {
+                console.error('Failed to decline request');
+            }
+        } catch (e) {
+            console.error('Error declining request:', e);
+        } finally {
+            setRequestsLoading(false);
+        }
+    };
+
+    const handleApproveAllRequests = async (sessionName) => {
+        setRequestsLoading(true);
+        try {
+            const res = await fetch(`${API_URL}/api/admin/sessions/${sessionName}/approve-all-requests`, {
+                method: 'POST',
+                credentials: 'include'
+            });
+            if (res.ok) {
+                setPlayerRequests(prev => prev.filter(r => r.session.name !== sessionName));
+                fetchData();
+            } else {
+                console.error('Failed to approve all requests');
+            }
+        } catch (e) {
+            console.error('Error approving all requests:', e);
+        } finally {
+            setRequestsLoading(false);
+        }
+    };
+
+    const fetchData = async () => {
+        try {
+            const [sessionsRes, usersRes, requestsRes] = await Promise.all([
+                fetch(`${API_URL}/api/admin/sessions`, { credentials: 'include' }),
+                fetch(`${API_URL}/api/admin/users`, { credentials: 'include' }),
+                fetch(`${API_URL}/api/admin/player-requests`, { credentials: 'include' })
+            ]);
+
+            if (sessionsRes.ok) {
+                const sessions = await sessionsRes.json();
+                setAdminSessions(sessions);
+            }
+            if (usersRes.ok) {
+                const users = await usersRes.json();
+                setAdminUsers(users);
+            }
+            if (requestsRes.ok) {
+                const requests = await requestsRes.json();
+                setPlayerRequests(requests);
+            }
+        } catch (e) {
+            console.error('Failed to fetch data', e);
+        }
+    };
     };
 
     const handleDeleteUser = async (userId) => {

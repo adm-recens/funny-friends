@@ -44,7 +44,7 @@ function evaluateHand(cards) {
     }
     
     // Check for Pure Sequence (Straight Flush)
-    const isSequence = (c1.value - c1.value === c2.value - c3.value + 1) || 
+    const isSequence = (c1.value - c2.value === 1 && c2.value - c3.value === 1) || 
                        (c1.rank === 'A' && c2.rank === '2' && c3.rank === '3'); // A-2-3 special case
     const isSameSuit = c1.suit === c2.suit && c2.suit === c3.suit;
     
@@ -112,7 +112,11 @@ class GameManager extends EventEmitter {
             folded: false,
             invested: 0
         }));
-        this.gameState.phase = 'SETUP';
+        // Only reset phase to SETUP if game hasn't started yet
+        // This preserves game state when operator reconnects
+        if (!this.gameState.phase || this.gameState.phase === 'SETUP') {
+            this.gameState.phase = 'SETUP';
+        }
     }
 
     addPlayer(player) {
