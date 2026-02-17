@@ -1720,6 +1720,7 @@ app.post('/api/sessions', requireAuth, asyncHandler(async (req, res) => {
 
 // --- IN-MEMORY STATE ---
 const activeSessions = new Map();
+const sessionLoaders = new Map(); // Track ongoing session loads to prevent race conditions
 
 // --- SOCKET MIDDLEWARE ---
 io.use((socket, next) => {
@@ -1779,54 +1780,125 @@ io.on('connection', (socket) => {
       }
 
       let manager = activeSessions.get(sessionName);
-      console.log('[DEBUG] Manager exists in activeSessions:', !!manager);
-      if (!manager) {
-        // Try load from DB
+
+      // Check if session is currently loading
+      if (sessionLoaders.has(sessionName)) {
+        console.log(`[DEBUG] Session ${sessionName} is currently loading, waiting...`);
         try {
-          const dbSession = await prisma.gameSession.findUnique({ where: { name: sessionName } });
-          if (dbSession && dbSession.isActive) {
-            const dbPlayers = await prisma.player.findMany({ where: { sessionId: dbSession.id } });
-            const initialPlayers = dbPlayers.map(p => ({
-              id: p.id,
-              name: p.name,
-              sessionBalance: p.sessionBalance,
-              seat: p.seatPosition
-            }));
+          manager = await sessionLoaders.get(sessionName);
+        } catch (e) {
+          console.error(`[ERROR] Failed to wait for session load:`, e);
+          return socket.emit('error_message', "Failed to join session");
+        }
+      }
 
-            manager = new GameManager(dbSession.id, sessionName, dbSession.totalRounds);
-            manager.currentRound = dbSession.currentRound || 1;
-            manager.setPlayers(initialPlayers);
-            console.log(`[DEBUG] Restored session ${sessionName} from DB with ${initialPlayers.length} players`);
+      if (!manager) {
+        // Start loading process
+        const loadPromise = (async () => {
+          try {
+            console.log(`[DEBUG] Starting DB load for session ${sessionName}`);
+            const dbSession = await prisma.gameSession.findUnique({ where: { name: sessionName } });
 
-            // Hook up events
-            manager.on('state_change', (state) => {
-              io.to(sessionName).emit('game_update', state);
-            });
-            manager.on('hand_complete', (summary) => {
-              io.to(sessionName).emit('game_update', { type: 'HAND_COMPLETE', ...summary });
-            });
-            manager.on('session_ended', async (data) => {
-              // Mark session as inactive in database
-              try {
-                await prisma.gameSession.update({
-                  where: { name: sessionName },
-                  data: { isActive: false }
-                });
-                console.log(`[DEBUG] Session ${sessionName} marked as complete`);
-              } catch (e) {
-                console.error('[ERROR] Failed to mark session as complete:', e);
-              }
+            if (dbSession && dbSession.isActive) {
+              const dbPlayers = await prisma.player.findMany({ where: { sessionId: dbSession.id } });
+              const initialPlayers = dbPlayers.map(p => ({
+                id: p.id,
+                name: p.name,
+                sessionBalance: p.sessionBalance,
+                seat: p.seatPosition
+              }));
 
-              io.to(sessionName).emit('session_ended', data);
-              activeSessions.delete(sessionName);
-            });
+              const newManager = new GameManager(dbSession.id, sessionName, dbSession.totalRounds);
+              newManager.currentRound = dbSession.currentRound || 1;
+              newManager.setPlayers(initialPlayers);
+              console.log(`[DEBUG] Restored session ${sessionName} from DB with ${initialPlayers.length} players`);
 
-            activeSessions.set(sessionName, manager);
-            console.log(`Initialized GameManager for ${sessionName}`);
-          } else {
-            return socket.emit('session_ended', { reason: "Session not found" });
+              // Hook up events (Ensure hooks are only added ONCE)
+              // Note: Using a persistent manager means events persist.
+              newManager.on('state_change', (state) => {
+                io.to(sessionName).emit('game_update', state);
+              });
+              newManager.on('hand_complete', async (summary) => {
+                // Save hand to database
+                try {
+                  const session = await prisma.gameSession.findUnique({ where: { name: sessionName } });
+                  if (session) {
+                    // Save hand history
+                    await prisma.gameHand.create({
+                      data: {
+                        winner: summary.winner.name,
+                        potSize: summary.pot,
+                        logs: JSON.stringify(summary.logs || []),
+                        sessionId: session.id
+                      }
+                    });
+
+                    // Update player balances
+                    if (summary.netChanges) {
+                      for (const [playerId, change] of Object.entries(summary.netChanges)) {
+                        const pid = parseInt(playerId);
+                        // Update player session balance atomically
+                        await prisma.player.update({
+                          where: { id: pid },
+                          data: {
+                            sessionBalance: { increment: change }
+                          }
+                        });
+                      }
+                    }
+
+                    // Update current round in GameSession
+                    await prisma.gameSession.update({
+                      where: { id: session.id },
+                      data: { currentRound: summary.currentRound }
+                    });
+                  }
+                } catch (e) {
+                  console.error('[ERROR] Failed to save hand persistence:', e);
+                }
+
+                io.to(sessionName).emit('game_update', { type: 'HAND_COMPLETE', ...summary });
+              });
+              newManager.on('session_ended', async (data) => {
+                // Mark session as inactive in database
+                try {
+                  await prisma.gameSession.update({
+                    where: { name: sessionName },
+                    data: { isActive: false }
+                  });
+                  console.log(`[DEBUG] Session ${sessionName} marked as complete`);
+                } catch (e) {
+                  console.error('[ERROR] Failed to mark session as complete:', e);
+                }
+
+                io.to(sessionName).emit('session_ended', data);
+                activeSessions.delete(sessionName);
+              });
+
+              activeSessions.set(sessionName, newManager);
+              console.log(`Initialized GameManager for ${sessionName}`);
+              return newManager;
+            } else {
+              return null;
+            }
+          } catch (e) {
+            console.error("Restore Error:", e);
+            throw e;
+          } finally {
+            sessionLoaders.delete(sessionName);
           }
-        } catch (e) { console.error("Restore Error:", e); }
+        })();
+
+        sessionLoaders.set(sessionName, loadPromise);
+
+        try {
+          manager = await loadPromise;
+          if (!manager) {
+            return socket.emit('session_ended', { reason: "Session not found or inactive" });
+          }
+        } catch (e) {
+          return socket.emit('error_message', "Internal server error during session load");
+        }
       }
 
       // Send current state

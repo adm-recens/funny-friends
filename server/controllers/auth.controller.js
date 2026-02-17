@@ -281,13 +281,18 @@ async function handleLogin(req, res) {
     const sessionId = generateSecureRandom(32);
     const expiresAt = new Date(Date.now() + SECURITY_CONFIG.SESSION_ABSOLUTE_TIMEOUT_HOURS * 60 * 60 * 1000);
 
-    // Parallel operations
-    await Promise.all([
-      prisma.user.update({
+    // === SUCCESS ===
+
+    // Transactional login update
+    await prisma.$transaction(async (tx) => {
+      // 1. Reset failed attempts
+      await tx.user.update({
         where: { id: user.id },
         data: { failedLoginAttempts: 0, lockedUntil: null }
-      }),
-      prisma.userSession.create({
+      });
+
+      // 2. Create Session
+      await tx.userSession.create({
         data: {
           id: sessionId,
           userId: user.id,
@@ -297,16 +302,18 @@ async function handleLogin(req, res) {
           deviceInfo: generateDeviceFingerprint(req),
           expiresAt
         }
-      }),
-      prisma.loginAttempt.create({
+      });
+
+      // 3. Log Success
+      await tx.loginAttempt.create({
         data: {
           username,
           ipAddress: clientIp,
           userAgent,
           success: true
         }
-      })
-    ]);
+      });
+    });
 
     // Get role-based dashboard data
     const dashboardData = await getUserDashboardData(user.id, user.role);

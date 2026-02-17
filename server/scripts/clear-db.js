@@ -1,7 +1,9 @@
 // Temporary script to clear database
 // Run this locally with: node clear-db.js
 
-require('dotenv').config();
+const path = require('path');
+// Load from project root .env.local for local dev
+require('dotenv').config({ path: path.join(__dirname, '../../.env.local') });
 
 const { PrismaClient } = require('@prisma/client');
 const { PrismaPg } = require('@prisma/adapter-pg');
@@ -14,20 +16,20 @@ async function clearDatabase() {
 
   try {
     console.log('Clearing database...');
-    
+
     // Delete in order to respect foreign keys
     await prisma.gameHand.deleteMany();
     console.log('✓ Deleted game hands');
-    
+
     await prisma.player.deleteMany();
     console.log('✓ Deleted players');
-    
+
     await prisma.gameSession.deleteMany();
     console.log('✓ Deleted game sessions');
-    
+
     await prisma.user.deleteMany();
     console.log('✓ Deleted users');
-    
+
     console.log('\n✅ Database cleared successfully!');
     console.log('You can now deploy and use the setup flow.');
   } catch (error) {
