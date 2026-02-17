@@ -21,7 +21,7 @@ const AdminDashboard = () => {
     const [setupKey, setSetupKey] = useState('');
     const [resetLoading, setResetLoading] = useState(false);
 
-    // ... existing useEffect ...
+    const isAdmin = user?.role === 'ADMIN';
 
     useEffect(() => {
         if (!isAdmin) return;
