@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, Gamepad2, Plus, Trash2, Eye, X, Heart, Activity, BarChart3, UserPlus, CheckCircle, AlertCircle, Clock } from 'lucide-react';
+import { ArrowLeft, Users, Gamepad2, Plus, Trash2, Eye, X, Heart, Activity, BarChart3, UserPlus, CheckCircle, AlertCircle, Clock, Trophy } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { API_URL } from '../config';
 
@@ -202,7 +202,6 @@ const AdminDashboard = () => {
         } catch (e) {
             console.error('Failed to fetch data', e);
         }
-    };
     };
 
     const handleDeleteUser = async (userId) => {
