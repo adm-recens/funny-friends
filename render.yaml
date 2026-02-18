@@ -22,6 +22,7 @@ services:
     runtime: node
     buildCommand: npm install && npm run build:platform
     startCommand: npm start
+    preDeployCommand: npm run db:push
     envVars:
       - key: NODE_ENV
         value: production
