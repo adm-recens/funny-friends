@@ -14,6 +14,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import OperatorDashboard from './pages/OperatorDashboard';
 import Viewer from './pages/Viewer';
 import Rummy from './pages/Rummy';
+import RummyGameRoom from '../../../rummy/client/pages/GameRoom';
 import Setup from './pages/Setup';
 import Profile from './pages/Profile';
 import TeenPattiHelp from './pages/TeenPattiHelp';
@@ -102,6 +103,14 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <GameRoom />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/rummy/game/:sessionName"
+        element={
+          <ProtectedRoute>
+            <RummyGameRoom />
           </ProtectedRoute>
         }
       />
