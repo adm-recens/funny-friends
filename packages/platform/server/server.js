@@ -15,7 +15,8 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const cookieParser = require('cookie-parser');
 const morgan = require('morgan');
-const GameManager = require('./game/GameManager');
+const TeenPattiGameManager = require('./game/GameManager');
+const RummyGameManager = require('../../rummy/server/GameManager');
 const {
   SECURITY_CONFIG,
   validatePasswordStrength,
@@ -1856,7 +1857,19 @@ io.on('connection', (socket) => {
                 seat: p.seatPosition
               }));
 
-              const newManager = new GameManager(dbSession.id, sessionName, dbSession.totalRounds);
+              // Get game type to determine which GameManager to use
+              const gameType = await prisma.gameType.findUnique({ 
+                where: { id: dbSession.gameTypeId },
+                select: { code: true }
+              });
+              
+              let newManager;
+              if (gameType?.code === 'rummy') {
+                newManager = new RummyGameManager(dbSession.id, sessionName, dbSession.totalRounds);
+              } else {
+                // Default to Teen Patti
+                newManager = new TeenPattiGameManager(dbSession.id, sessionName, dbSession.totalRounds);
+              }
               newManager.currentRound = dbSession.currentRound || 1;
               newManager.setPlayers(initialPlayers);
               console.log(`[DEBUG] Restored session ${sessionName} from DB with ${initialPlayers.length} players`);
@@ -2004,20 +2017,55 @@ io.on('connection', (socket) => {
 
     console.log('[DEBUG] Manager found. Current phase:', manager.gameState.phase, 'Players:', manager.gameState.players.length);
 
-    if (action.type === 'START_GAME') {
+    if (action.type === 'START_ROUND' || action.type === 'START_GAME') {
       console.log('[DEBUG] Calling startRound()');
       const result = manager.startRound();
       console.log('[DEBUG] startRound result:', result);
       if (!result.success) socket.emit('error_message', result.error);
     } else if (action.type === 'CANCEL_SIDE_SHOW') {
-      // F1 FIX: Handle cancel side show
-      const result = manager.cancelSideShow();
-      if (!result.success) socket.emit('error_message', result.error);
+      // F1 FIX: Handle cancel side show (Teen Patti only)
+      if (manager.cancelSideShow) {
+        const result = manager.cancelSideShow();
+        if (!result.success) socket.emit('error_message', result.error);
+      }
     } else if (action.type === 'CANCEL_SHOW') {
-      // F1 FIX: Handle cancel show
-      const result = manager.cancelShow();
-      if (!result.success) socket.emit('error_message', result.error);
+      // F1 FIX: Handle cancel show (Teen Patti only)
+      if (manager.cancelShow) {
+        const result = manager.cancelShow();
+        if (!result.success) socket.emit('error_message', result.error);
+      }
+    } else if (action.type === 'DRAW_CARD') {
+      // Rummy specific
+      if (manager.drawCard) {
+        const result = manager.drawCard(socket.user.id, action.source);
+        if (result.success) {
+          // Send player their hand
+          const handData = manager.getPlayerHand(socket.user.id);
+          socket.emit('player_hand', handData);
+        } else {
+          socket.emit('error_message', result.error);
+        }
+      }
+    } else if (action.type === 'DISCARD_CARD') {
+      // Rummy specific
+      if (manager.discardCard) {
+        const result = manager.discardCard(socket.user.id, action.cardId);
+        if (!result.success) socket.emit('error_message', result.error);
+      }
+    } else if (action.type === 'DECLARE_RUMMY') {
+      // Rummy specific
+      if (manager.declareRummy) {
+        const result = manager.declareRummy(socket.user.id, action.combinations);
+        if (!result.success) socket.emit('error_message', result.error);
+      }
+    } else if (action.type === 'SHOW_CARDS') {
+      // Rummy specific
+      if (manager.showCards) {
+        const result = manager.showCards(socket.user.id, action.combinations);
+        if (!result.success) socket.emit('error_message', result.error);
+      }
     } else {
+      // Teen Patti actions
       const result = manager.handleAction(action);
       if (!result.success) socket.emit('error_message', result.error);
     }
