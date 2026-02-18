@@ -12,7 +12,6 @@
     "clean": "rm -rf node_modules dist"
   },
   "dependencies": {
-    "@funny-friends/shared": "^1.0.0",
     "@tailwindcss/postcss": "^4.1.17",
     "lucide-react": "^0.554.0",
     "react": "^19.2.0",
