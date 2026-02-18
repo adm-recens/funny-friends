@@ -5,14 +5,12 @@
   "main": "server.js",
   "scripts": {
     "dev": "nodemon server.js",
-    "start": "npx prisma db push && npx prisma generate && node scripts/seed-games.js && node server.js",
+    "build": "echo 'No build step required'",
+    "start": "node server.js",
     "db:push": "npx prisma db push",
-    "db:push:sqlite": "npx prisma db push --schema=prisma/schema.sqlite.prisma",
-    "db:migrate": "npx prisma migrate dev",
-    "db:studio": "npx prisma studio",
-    "db:seed": "node scripts/seed-games.js",
     "db:generate": "npx prisma generate",
-    "db:generate:sqlite": "npx prisma generate --schema=prisma/schema.sqlite.prisma",
+    "db:seed": "node scripts/seed-games.js",
+    "db:studio": "npx prisma studio",
     "clean": "rm -rf node_modules"
   },
   "keywords": [],

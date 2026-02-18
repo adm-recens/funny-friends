@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
@@ -12,10 +12,12 @@ import SessionSetup from './pages/SessionSetup';
 import GameRoom from './pages/GameRoom';
 import Viewer from './pages/Viewer';
 import Rummy from './pages/Rummy';
-import RummyGameRoom from '../../../rummy/client/pages/GameRoom';
 import Setup from './pages/Setup';
 import Profile from './pages/Profile';
 import TeenPattiHelp from './pages/TeenPattiHelp';
+
+// Lazy load RummyGameRoom - it's an optional game module
+const RummyGameRoom = lazy(() => import('../../../rummy/client/pages/GameRoom').catch(() => ({ default: Rummy })));
 
 // Admin Control Panel
 import AdminControlPanel from './pages/admin/AdminControlPanel';
@@ -123,7 +125,9 @@ const AppRoutes = () => {
         path="/rummy/game/:sessionName"
         element={
           <ProtectedRoute>
-            <RummyGameRoom />
+            <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div>Loading...</div></div>}>
+              <RummyGameRoom />
+            </Suspense>
           </ProtectedRoute>
         }
       />
