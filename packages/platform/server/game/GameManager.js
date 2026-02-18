@@ -1,3 +1,32 @@
+/**
+ * TEEN PATTI GAME MANAGER - LEDGER SYSTEM
+ * 
+ * ⚠️ IMPORTANT: This is NOT an online game engine!
+ * 
+ * This class manages the digital ledger for recording physical Teen Patti games.
+ * Players play with REAL cards in person, and the operator uses this app
+ * to record scores, track hands, and calculate settlements.
+ * 
+ * Key Concepts:
+ * - Physical cards are dealt and played in person
+ * - This app only RECORDS what happened in the physical game
+ * - The operator inputs: bets, folds, shows, winners, etc.
+ * - This class validates that recorded hands are valid Teen Patti hands
+ * - It calculates pot distribution and maintains the ledger
+ * 
+ * Game Flow:
+ * 1. Operator creates a session and adds players
+ * 2. Physical game: Cards are dealt (this app tracks hands for recording)
+ * 3. Physical game: Players bet, call, raise, fold with real cards
+ * 4. Operator records: who bet what, who folded, who showed
+ * 5. This class calculates pot and distributes winnings
+ * 6. All players see updated balances on their devices
+ * 7. Process repeats for each hand/round
+ * 8. Final settlement shows who pays whom
+ * 
+ * This is a RECORD-KEEPING system, not a GAME-PLAYING system!
+ */
+
 const EventEmitter = require('events');
 
 // Teen Patti Hand Rankings (Highest to Lowest)
