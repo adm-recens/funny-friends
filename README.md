@@ -1,82 +1,58 @@
-# Funny Friends
+# Funny Friends - Teen Patti Platform
 
-A secure, multiplayer platform where friends gather to play card games together. Currently featuring Teen Patti, with more games coming soon!
+A secure, professional-grade multiplayer platform for playing Teen Patti (Indian Poker) with friends. Built with production-ready security, real-time gameplay, and enterprise-level features.
 
 [![Security Rating](https://img.shields.io/badge/security-A+-brightgreen)](SECURITY_AUDIT.md)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## Security First
+## 🎮 Live Application
 
-This application has undergone comprehensive security hardening. See our [Security Audit Report](SECURITY_AUDIT.md) for details.
+**Production URL**: [https://funny-friends.onrender.com](https://funny-friends.onrender.com)
 
-**Key Security Features:**
-- 🔒 HTTP-only cookies for secure session management
-- 🛡️ Helmet.js security headers
-- 🚫 Rate limiting on authentication endpoints
-- ✅ Input validation with Zod schemas
-- 🔐 Role-based access control (RBAC)
-- 📝 Comprehensive audit trail
+## ✨ Key Features
 
-## Features
+### 🃏 Teen Patti Game Features
+- **Complete Game Mechanics**: Boot, Chaal, Blind, Seen, Side Show, Force Show, Show
+- **Hand Rankings**: Trail, Pure Sequence, Sequence, Color, Pair, High Card with tie-breaker rules
+- **Smart Betting**: Automatic stake management, doubling, and custom bids
+- **Real-time Updates**: Live game state via WebSocket with sub-second latency
+- **Game History**: Persistent hand history with winner details and pot sizes
 
-- **Teen Patti**: The classic Indian card game with full betting mechanics
-- **Multiplayer**: Support for 2-6 players per game
-- **Real-time**: Live game updates via WebSocket
-- **Role-based Access**: Admin, Operator, Player, and Viewer roles
-- **Secure**: Production-grade security with JWT authentication
-- **Responsive**: Works on desktop and mobile devices
+### 👥 Multiplayer & Roles
+- **4 User Roles**: Admin, Operator, Player, Viewer
+- **2-17 Players per Game**: Flexible session sizes
+- **Viewer Mode**: Spectate games with operator approval
+- **Session Management**: Create, manage, and end game sessions
 
-## Quick Links
+### 🔐 Enterprise Security
+- **Role-Based Access Control (RBAC)**: Granular permissions per role
+- **JWT Authentication**: Secure tokens with 8-hour expiration
+- **HTTP-only Cookies**: XSS-resistant session management
+- **Rate Limiting**: Protection against brute force attacks
+- **Input Validation**: Zod schemas for all inputs
+- **Helmet.js**: Security headers (CSP, HSTS, X-Frame-Options)
+- **SQL Injection Protection**: Prisma ORM with parameterized queries
+- **Account Lockout**: Automatic lockout after 5 failed attempts
 
-- 📖 [Local Development Guide](LOCAL_DEVELOPMENT.md) - Get started in 5 minutes
-- 🚀 [Production Deployment Guide](PRODUCTION_DEPLOYMENT.md) - Deploy to Render
-- 🔐 [Security Audit Report](SECURITY_AUDIT.md) - Security details
+### 🎨 Professional UX
+- **Toast Notifications**: Beautiful, non-intrusive feedback system
+- **Real-time Turn Indicator**: Clear visual indicators for active player
+- **Invite Links**: Easy session sharing with one-click copy
+- **Comprehensive Help**: Detailed game rules with visual examples
+- **Responsive Design**: Works perfectly on desktop and mobile
+- **Loading States**: Professional spinners and disabled states
+- **Error Handling**: Graceful error messages throughout
 
-## Architecture
+### 📊 Admin & Operator Features
+- **User Management**: Create and manage operators with game permissions
+- **Game Assignment**: Assign specific games to operators
+- **Session Monitoring**: View active and ended sessions
+- **Player Requests**: Approve/decline player join requests
+- **System Reset**: Full database reset capability
 
-This is a **full-stack monorepo** with the following structure:
-
-```
-funny-friends/
-├── client/                 # React Frontend (Vite + React 19)
-│   ├── src/               # Source code
-│   ├── dist/              # Production build (generated)
-│   └── package.json       # Frontend dependencies
-├── server/                 # Express Backend
-│   ├── server.js          # Entry point
-│   ├── game/              # Game logic (GameManager)
-│   ├── prisma/            # Database schema & migrations
-│   └── package.json       # Backend dependencies
-├── package.json           # Root configuration & scripts
-└── render.yaml            # Render deployment config
-```
-
-### How It Works
-
-**Development Mode:**
-- Frontend runs on `http://localhost:5173` (Vite dev server)
-- Backend runs on `http://localhost:3000` (Express server)
-- SQLite database for easy local development
-
-**Production Mode (Render):**
-- Single Express server serves both API and static files
-- PostgreSQL database for production reliability
-- All traffic over HTTPS with security headers
-
-## Tech Stack
-
-- **Frontend**: React 19 + Vite + Tailwind CSS
-- **Backend**: Express.js 5 + Socket.io
-- **Database**: SQLite (local) / PostgreSQL (production)
-- **ORM**: Prisma with PostgreSQL driver adapter
-- **Real-time**: Socket.io for live game updates
-- **Security**: Helmet.js, express-rate-limit, bcrypt, JWT
-- **Validation**: Zod for input validation
-
-## Quick Start
+## 🚀 Quick Start
 
 ### Prerequisites
-
 - Node.js 18+
 - npm 9+
 
@@ -94,14 +70,14 @@ npm run install-all
 # Server environment
 cd server
 cp .env.example .env
-# Edit .env with your settings (see below)
+# Edit .env with your settings
 
 # Client environment
 cd ../client
 cp .env.example .env.local
 ```
 
-**Minimum server/.env configuration:**
+**Minimum server/.env:**
 ```env
 DATABASE_URL="file:./dev.db"
 JWT_SECRET="your-secret-min-32-characters-long"
@@ -109,12 +85,6 @@ ADMIN_SETUP_KEY="your-setup-key-min-10-characters"
 CLIENT_URL="http://localhost:5173"
 PORT=3000
 NODE_ENV=development
-```
-
-**Generate secure keys:**
-```bash
-node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"  # JWT_SECRET
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"  # ADMIN_SETUP_KEY
 ```
 
 ### 3. Initialize Database
@@ -135,36 +105,73 @@ npm run dev
 - Frontend: http://localhost:5173
 - Backend API: http://localhost:3000
 
-### 5. First-Time Setup
+## 📖 Game Rules Documentation
 
-1. Open http://localhost:5173
-2. You'll see the setup page (only appears when no users exist)
-3. Enter your `ADMIN_SETUP_KEY` from `.env`
-4. Create the first admin account
-5. Login with your new credentials
+### Hand Rankings (High to Low)
 
-## Deployment
+1. **Trail (Three of a Kind)** - Three cards of same rank (AAA highest)
+2. **Pure Sequence** - Three consecutive cards of same suit (A-K-Q of spades)
+3. **Sequence** - Three consecutive cards, mixed suits (A-K-Q)
+4. **Color (Flush)** - Three cards of same suit, not in sequence
+5. **Pair** - Two cards of same rank (A-A-K beats K-K-Q)
+6. **High Card** - None of the above, compare highest cards
 
-### Render (Recommended)
+### Special Rules
 
-The easiest way to deploy:
+**A-2-3 Sequence:**
+- A-2-3 is the LOWEST straight, not the highest
+- Ranking: A-K-Q > K-Q-J > ... > 4-3-2 > A-2-3
 
-1. **Push to GitHub**
-2. **Connect to Render**:
-   - Go to [Render Dashboard](https://dashboard.render.com/)
-   - Click "New" → "Blueprint"
-   - Connect your repository
-3. **Set Environment Variables**:
-   ```
-   JWT_SECRET=<generate-64-char-random>
-   ADMIN_SETUP_KEY=<generate-32-char-random>
-   CLIENT_URL=https://your-app.onrender.com
-   ```
-4. **Deploy**
+**Side Show:**
+- Only SEEN players can request
+- Target must be previous active SEEN player
+- Cost: Equal to current stake
+- Loser folds, stake stays same
 
-See [Production Deployment Guide](PRODUCTION_DEPLOYMENT.md) for detailed instructions.
+**Force Show:**
+- SEEN player vs BLIND player (when 1-2 blinds remain)
+- If SEEN wins: Normal win
+- If BLIND wins: SEEN player pays 2× penalty AND folds
 
-## Available Scripts
+### Betting Structure
+
+- **Boot**: 5 chips (collected from all at start)
+- **Initial Stake**: 20 chips
+- **BLIND bet**: ½ of current stake
+- **SEEN bet (Chaal)**: Full current stake
+- **Raise**: Double the current stake
+
+## 🏗️ Architecture
+
+```
+funny-friends/
+├── client/                 # React Frontend (Vite + React 19)
+│   ├── src/
+│   │   ├── components/    # Reusable UI components
+│   │   ├── pages/         # Page components
+│   │   ├── context/       # React contexts (Auth, Toast)
+│   │   └── config.js      # API configuration
+│   └── package.json
+├── server/                 # Express Backend
+│   ├── server.js          # Entry point & API routes
+│   ├── game/
+│   │   └── GameManager.js # Game logic & state management
+│   ├── prisma/            # Database schema & migrations
+│   └── package.json
+├── package.json           # Root configuration & scripts
+└── render.yaml            # Render deployment config
+```
+
+### Technology Stack
+
+- **Frontend**: React 19, Vite, Tailwind CSS, Socket.io-client
+- **Backend**: Express.js 5, Socket.io, JWT
+- **Database**: SQLite (dev) / PostgreSQL (production)
+- **ORM**: Prisma with connection pooling
+- **Security**: Helmet.js, express-rate-limit, bcrypt
+- **Validation**: Zod schemas
+
+## 🔧 Available Scripts
 
 ### Development
 ```bash
@@ -190,80 +197,102 @@ npm run db:studio        # Open Prisma Studio
 npm run db:seed          # Seed sample data
 ```
 
-## Security Features
+## 🚀 Deployment
 
-### Implemented
+### Render (Recommended)
 
-- ✅ **HTTP-only Cookies**: Tokens never accessible to JavaScript
-- ✅ **Rate Limiting**: 5 login attempts per 15 minutes
-- ✅ **Input Validation**: Zod schemas for all inputs
-- ✅ **Helmet.js**: Security headers (CSP, HSTS, etc.)
-- ✅ **CORS**: Whitelist-based origin validation
-- ✅ **RBAC**: Role-based access control
-- ✅ **Password Hashing**: bcrypt with 12 rounds
-- ✅ **JWT Expiration**: 8-hour token lifetime
-- ✅ **SQL Injection Protection**: Prisma ORM with parameterized queries
-- ✅ **XSS Protection**: Content Security Policy headers
+1. **Push to GitHub**
+2. **Connect to Render**:
+   - Go to [Render Dashboard](https://dashboard.render.com/)
+   - Click "New" → "Blueprint"
+   - Connect your repository
+3. **Set Environment Variables**:
+   ```
+   JWT_SECRET=<64-character-random>
+   ADMIN_SETUP_KEY=<32-character-random>
+   CLIENT_URL=https://your-app.onrender.com
+   ```
+4. **Deploy** - Render handles the rest!
 
-### Environment Security
+See [Production Deployment Guide](PRODUCTION_DEPLOYMENT.md) for detailed instructions.
 
-- 🔒 Secrets stored in environment variables only
-- 🔒 `.env` files excluded from git
-- 🔒 No hardcoded credentials
-- 🔒 One-time setup key for initial admin
+## 🔐 Security Features
 
-## Project Structure
+### Authentication & Authorization
+- ✅ HTTP-only cookies for JWT storage
+- ✅ 8-hour token expiration
+- ✅ Role-based access control (RBAC)
+- ✅ Account lockout after 5 failed attempts
+- ✅ Secure password hashing (bcrypt, 12 rounds)
 
-```
-funny-friends/
-├── client/                 # React frontend
-│   ├── src/
-│   │   ├── components/    # Reusable components
-│   │   ├── pages/         # Page components
-│   │   ├── context/       # React contexts
-│   │   └── config.js      # API configuration
-│   └── package.json
-├── server/                 # Node.js backend
-│   ├── prisma/
-│   │   ├── schema.prisma  # Database schema
-│   │   └── dev.db         # SQLite (gitignored)
-│   ├── game/
-│   │   └── GameManager.js # Game logic
-│   ├── server.js          # Main server file
-│   └── package.json
-├── .gitignore             # Git exclusions
-├── LOCAL_DEVELOPMENT.md   # Local setup guide
-├── PRODUCTION_DEPLOYMENT.md # Production guide
-├── SECURITY_AUDIT.md      # Security audit report
-└── README.md              # This file
-```
+### API Security
+- ✅ Rate limiting on all auth endpoints
+- ✅ Input validation with Zod schemas
+- ✅ CORS whitelist validation
+- ✅ Helmet.js security headers
+- ✅ SQL injection protection via Prisma
 
-## Documentation
+### Game Security
+- ✅ Server-side game state validation
+- ✅ Anti-cheating measures
+- ✅ Secure WebSocket authentication
+- ✅ Action authorization checks
 
-- 📖 [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md) - Complete local development guide
-- 🚀 [PRODUCTION_DEPLOYMENT.md](PRODUCTION_DEPLOYMENT.md) - Production deployment instructions
-- 🔐 [SECURITY_AUDIT.md](SECURITY_AUDIT.md) - Security audit and hardening details
+## 📱 User Guide
 
-## Environment Variables
+### For Players
 
-### Server (.env)
+1. **Join a Game**:
+   - Get invite link from operator
+   - Enter your name
+   - Wait for operator approval
+   - Watch the game live!
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `DATABASE_URL` | Database connection string | Yes |
-| `JWT_SECRET` | JWT signing secret (64+ chars) | Yes |
-| `ADMIN_SETUP_KEY` | First-time setup key (32+ chars) | Yes |
-| `CLIENT_URL` | Allowed CORS origin | Yes |
-| `PORT` | Server port | No (default: 3000) |
-| `NODE_ENV` | Environment mode | No (default: development) |
+2. **During Game**:
+   - View current turn indicator
+   - See all players and their bets
+   - Watch hand history in game log
+   - Real-time updates of pot and stakes
 
-### Client (.env.local)
+### For Operators
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `VITE_BACKEND_URL` | Backend URL (empty for same-origin) | No |
+1. **Create Session**:
+   - Login as Operator
+   - Go to Operator Dashboard
+   - Click "Create New Session"
+   - Add players (2-17)
+   - Share invite link with viewers
 
-## Troubleshooting
+2. **Manage Game**:
+   - Start rounds
+   - Handle Side Show requests
+   - Resolve Show/Force Show
+   - Manage viewer access requests
+   - End session when done
+
+3. **Player Actions**:
+   - SEEN: View your cards (pay current stake)
+   - BLIND: Play without seeing cards (pay ½ stake)
+   - CHAAL: Match current stake
+   - RAISE: Double the stake
+   - FOLD: Pack your cards
+   - SIDE SHOW: Compare with previous player
+   - SHOW: Final showdown
+
+### For Admins
+
+1. **Manage Operators**:
+   - Go to Admin Dashboard
+   - Create operator accounts
+   - Assign game permissions
+   - Monitor all sessions
+
+2. **System Management**:
+   - View system statistics
+   - Manage user accounts
+   - Reset database if needed
+
+## 🛠️ Troubleshooting
 
 ### Port Already in Use
 ```bash
@@ -273,8 +302,8 @@ npx kill-port 3000  # or 5173
 ### Database Issues
 ```bash
 cd server
-rm prisma/dev.db prisma/dev.db-journal  # Reset SQLite
-npx prisma db push  # Recreate
+rm prisma/dev.db prisma/dev.db-journal
+npx prisma db push
 ```
 
 ### CORS Errors
@@ -283,22 +312,58 @@ npx prisma db push  # Recreate
 
 ### Build Errors
 ```bash
-# Clear caches
 rm -rf node_modules client/node_modules server/node_modules
 rm -rf client/dist
 npm run install-all
 ```
 
-## Security Best Practices
+## 📝 API Documentation
 
-1. **Never commit `.env` files** - They are already in `.gitignore`
-2. **Use strong passwords** - Minimum 8 characters, mixed case, numbers
-3. **Rotate secrets regularly** - Especially `JWT_SECRET` and `ADMIN_SETUP_KEY`
-4. **Keep dependencies updated** - Run `npm audit` regularly
-5. **Monitor logs** - Check for unusual activity
-6. **Use HTTPS in production** - Render provides this automatically
+### Authentication
+- `POST /api/auth/login` - Login with credentials
+- `POST /api/auth/logout` - Logout user
+- `GET /api/auth/me` - Get current user
 
-## Contributing
+### Sessions
+- `POST /api/sessions` - Create new session
+- `GET /api/sessions/:name` - Get session details
+- `POST /api/sessions/:name/end` - End session
+
+### Game Actions (WebSocket)
+- `game_action` - Send game action
+- `game_update` - Receive game state updates
+- `viewer_requested` - Handle viewer requests
+
+### Admin APIs
+- `GET /api/admin/sessions` - List all sessions
+- `POST /api/admin/users` - Create user
+- `DELETE /api/admin/users/:id` - Delete user
+- `POST /api/admin/player-requests/:id/resolve` - Approve/decline player
+
+## 🗺️ Roadmap
+
+### Completed ✅
+- [x] Teen Patti with complete rules
+- [x] Real-time multiplayer gameplay
+- [x] Role-based access control
+- [x] Security hardening
+- [x] Toast notification system
+- [x] Session invite links
+- [x] Comprehensive help documentation
+- [x] Turn indicators
+- [x] Viewer mode with approval
+
+### Coming Soon 📅
+- [ ] Rummy game mode
+- [ ] Poker (Texas Hold'em)
+- [ ] User avatars
+- [ ] Game statistics & analytics
+- [ ] Tournament mode
+- [ ] Mobile app (React Native)
+- [ ] Sound effects & animations
+- [ ] Chat system
+
+## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
@@ -306,31 +371,28 @@ npm run install-all
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-Please read our security guidelines before contributing.
+Please read our [Security Guidelines](SECURITY_AUDIT.md) before contributing.
 
-## Future Roadmap
-
-- [x] Teen Patti game
-- [x] Security hardening
-- [ ] Rummy game
-- [ ] Poker game
-- [ ] User avatars
-- [ ] Game statistics
-- [ ] Mobile app
-- [ ] Tournament mode
-
-## License
+## 📄 License
 
 MIT License - feel free to use this project for your own games!
 
-## Support
+## 🙏 Acknowledgments
 
-- 📧 Open an issue on GitHub
-- 📖 Check the documentation links above
-- 🔐 Review the security audit for security questions
+- Built with ❤️ for friends who love playing games together
+- Security-first architecture inspired by enterprise standards
+- Real-time gameplay powered by Socket.io
+- Beautiful UI with Tailwind CSS
+
+## 📞 Support
+
+- 🐛 **Bug Reports**: Open an issue on GitHub
+- 📖 **Documentation**: Check the guides linked above
+- 🔐 **Security**: Review the [Security Audit](SECURITY_AUDIT.md)
+- 💬 **Questions**: Start a discussion on GitHub
 
 ---
 
-Built with ❤️ for friends who love to play games together!
+**Made with ❤️ | Security First | Production Ready | Open Source**
 
-**Security First | Production Ready | Open Source**
+[Live Demo](https://funny-friends.onrender.com) • [Documentation](LOCAL_DEVELOPMENT.md) • [Report Bug](../../issues) • [Request Feature](../../issues)
