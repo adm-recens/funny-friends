@@ -51,7 +51,7 @@ const OperatorDashboardOverview = () => {
       title: 'Active Sessions',
       value: stats.activeSessions,
       icon: Gamepad2,
-      color: 'green',
+      color: 'emerald',
       description: 'Currently running'
     },
     {
@@ -65,7 +65,7 @@ const OperatorDashboardOverview = () => {
       title: 'Total Players',
       value: stats.totalPlayers,
       icon: Users,
-      color: 'purple',
+      color: 'violet',
       description: 'Across all sessions'
     },
     {
@@ -80,7 +80,7 @@ const OperatorDashboardOverview = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-12 h-12 border-4 border-violet-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -88,17 +88,17 @@ const OperatorDashboardOverview = () => {
   return (
     <div className="space-y-6">
       {/* Welcome Banner */}
-      <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl p-6 text-white">
+      <div className="bg-gradient-to-r from-violet-600 to-violet-800 rounded-2xl p-6 text-white">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-2xl font-bold mb-2">Welcome, Operator!</h3>
-            <p className="text-purple-100">
+            <p className="text-violet-100">
               Manage your game sessions and track player activity from this control panel.
             </p>
           </div>
           <button
-            onClick={() => navigate('/setup')}
-            className="hidden md:flex items-center gap-2 px-6 py-3 bg-white text-purple-600 rounded-xl font-bold hover:bg-purple-50 transition-colors"
+            onClick={() => navigate('/sessions/new')}
+            className="hidden md:flex items-center gap-2 px-6 py-3 bg-white text-violet-600 rounded-xl font-bold hover:bg-slate-100 transition-colors"
           >
             <Plus size={20} />
             Create Session
@@ -111,15 +111,25 @@ const OperatorDashboardOverview = () => {
         {statCards.map((stat, index) => (
           <div 
             key={index}
-            className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm"
+            className="bg-slate-800 rounded-xl border border-slate-700 p-6 hover:border-slate-600 hover:shadow-lg transition-all duration-200"
           >
             <div className="flex items-start justify-between mb-4">
-              <div className={`p-3 rounded-xl bg-${stat.color}-100`}>
-                <stat.icon size={24} className={`text-${stat.color}-600`} />
+              <div className={`p-3 rounded-xl ${
+                stat.color === 'emerald' ? 'bg-emerald-500/10' :
+                stat.color === 'blue' ? 'bg-blue-500/10' :
+                stat.color === 'violet' ? 'bg-violet-500/10' :
+                'bg-orange-500/10'
+              }`}>
+                <stat.icon size={24} className={`${
+                  stat.color === 'emerald' ? 'text-emerald-400' :
+                  stat.color === 'blue' ? 'text-blue-400' :
+                  stat.color === 'violet' ? 'text-violet-400' :
+                  'text-orange-400'
+                }`} />
               </div>
             </div>
-            <h4 className="text-2xl font-bold text-slate-900 mb-1">{stat.value}</h4>
-            <p className="text-sm font-medium text-slate-700">{stat.title}</p>
+            <h4 className="text-2xl font-bold text-slate-50 mb-1">{stat.value}</h4>
+            <p className="text-sm font-medium text-slate-300">{stat.title}</p>
             <p className="text-xs text-slate-500 mt-1">{stat.description}</p>
           </div>
         ))}
@@ -128,12 +138,12 @@ const OperatorDashboardOverview = () => {
       {/* Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Sessions */}
-        <div className="bg-white rounded-xl p-6 border border-slate-200">
+        <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-slate-900">Active Sessions</h3>
+            <h3 className="text-lg font-bold text-slate-50">Active Sessions</h3>
             <button
               onClick={() => navigate('/operator/sessions')}
-              className="text-sm text-purple-600 hover:text-purple-700 font-medium"
+              className="text-sm text-violet-400 hover:text-violet-300 font-medium"
             >
               View All
             </button>
@@ -141,11 +151,11 @@ const OperatorDashboardOverview = () => {
 
           {recentSessions.length === 0 ? (
             <div className="text-center py-8">
-              <Gamepad2 size={48} className="mx-auto text-slate-300 mb-4" />
-              <p className="text-slate-500">No active sessions</p>
+              <Gamepad2 size={48} className="mx-auto text-slate-600 mb-4" />
+              <p className="text-slate-400">No active sessions</p>
               <button
-                onClick={() => navigate('/setup')}
-                className="mt-4 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                onClick={() => navigate('/sessions/new')}
+                className="mt-4 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 active:scale-95 bg-violet-600 hover:bg-violet-700 text-white focus:ring-violet-500"
               >
                 Create Your First Session
               </button>
@@ -155,20 +165,20 @@ const OperatorDashboardOverview = () => {
               {recentSessions.map((session) => (
                 <div 
                   key={session.id}
-                  className="flex items-center justify-between p-4 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors"
+                  className="flex items-center justify-between p-4 bg-slate-900 rounded-lg hover:bg-slate-700 transition-colors border border-slate-700"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+                    <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-violet-700 rounded-lg flex items-center justify-center">
                       <span className="text-white text-xl">🎮</span>
                     </div>
                     <div>
-                      <p className="font-medium text-slate-900">{session.name}</p>
-                      <p className="text-sm text-slate-500">{session.gameType?.name || 'Unknown'}</p>
+                      <p className="font-medium text-slate-200">{session.name}</p>
+                      <p className="text-sm text-slate-400">{session.gameType?.name || 'Unknown'}</p>
                     </div>
                   </div>
                   <button
                     onClick={() => navigate(`/game/${session.name}`)}
-                    className="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors text-sm font-medium"
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 active:scale-95 bg-slate-700 hover:bg-slate-600 text-slate-100 focus:ring-slate-500 text-sm"
                   >
                     Join
                   </button>
@@ -179,8 +189,8 @@ const OperatorDashboardOverview = () => {
         </div>
 
         {/* Quick Start */}
-        <div className="bg-white rounded-xl p-6 border border-slate-200">
-          <h3 className="text-lg font-bold text-slate-900 mb-4">Quick Start Guide</h3>
+        <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
+          <h3 className="text-lg font-bold text-slate-50 mb-4">Quick Start Guide</h3>
           
           <div className="space-y-4">
             {[
@@ -190,12 +200,12 @@ const OperatorDashboardOverview = () => {
               { step: 4, title: 'View Settlements', desc: 'See final balances and settlements' }
             ].map((item) => (
               <div key={item.step} className="flex items-start gap-4">
-                <div className="w-8 h-8 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0">
+                <div className="w-8 h-8 bg-violet-500/10 text-violet-400 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0">
                   {item.step}
                 </div>
                 <div>
-                  <p className="font-medium text-slate-900">{item.title}</p>
-                  <p className="text-sm text-slate-500">{item.desc}</p>
+                  <p className="font-medium text-slate-200">{item.title}</p>
+                  <p className="text-sm text-slate-400">{item.desc}</p>
                 </div>
               </div>
             ))}
@@ -205,8 +215,8 @@ const OperatorDashboardOverview = () => {
 
       {/* Mobile Create Button */}
       <button
-        onClick={() => navigate('/setup')}
-        className="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-purple-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-purple-700 transition-colors"
+        onClick={() => navigate('/sessions/new')}
+        className="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-violet-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-violet-700 transition-colors"
       >
         <Plus size={24} />
       </button>

@@ -26,7 +26,6 @@ const SessionSetup = () => {
     { name: '', seat: 1 }
   ]);
 
-  // Fetch available games
   useEffect(() => {
     fetchGames();
   }, []);
@@ -40,7 +39,6 @@ const SessionSetup = () => {
         const data = await res.json();
         setGames(data.filter(g => g.isActive));
         
-        // Pre-select game from URL param
         const gameCode = searchParams.get('game');
         if (gameCode) {
           const game = data.find(g => g.code === gameCode);
@@ -66,7 +64,6 @@ const SessionSetup = () => {
       return;
     }
     const newPlayers = players.filter((_, i) => i !== index);
-    // Reassign seats
     setPlayers(newPlayers.map((p, i) => ({ ...p, seat: i + 1 })));
   };
 
@@ -81,7 +78,6 @@ const SessionSetup = () => {
     setError('');
     setLoading(true);
 
-    // Validation
     if (!formData.name.trim()) {
       setError('Session name is required');
       setLoading(false);
@@ -94,7 +90,6 @@ const SessionSetup = () => {
       return;
     }
 
-    // Validate all players have names
     const validPlayers = players.filter(p => p.name.trim());
     if (validPlayers.length < selectedGame.minPlayers) {
       setError(`At least ${selectedGame.minPlayers} players required for ${selectedGame.name}`);
@@ -127,8 +122,7 @@ const SessionSetup = () => {
       const data = await res.json();
 
       if (res.ok && data.success) {
-        // Navigate to the session
-        navigate(`/operator/sessions`);
+        navigate('/operator/sessions');
       } else {
         setError(data.error || data.message || 'Failed to create session');
       }
@@ -141,63 +135,60 @@ const SessionSetup = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="page-container">
+      {/* Background gradient */}
+      <div className="fixed inset-0 bg-gradient-radial from-primary-900/20 via-slate-900 to-slate-900" />
+      
       {/* Header */}
-      <div className="bg-white border-b border-slate-200">
-        <div className="max-w-4xl mx-auto px-4 py-4">
+      <div className="relative border-b border-slate-800">
+        <div className="page-content">
           <div className="flex items-center gap-4">
             <button
               onClick={() => navigate('/operator/sessions')}
-              className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              className="btn-ghost p-2"
             >
-              <ArrowLeft size={20} className="text-slate-600" />
+              <ArrowLeft size={20} />
             </button>
             <div>
-              <h1 className="text-xl font-bold text-slate-900">Create New Session</h1>
-              <p className="text-sm text-slate-500">Set up a new game session</p>
+              <h1 className="text-2xl font-bold">Create New Session</h1>
+              <p className="text-slate-400">Set up a new game session</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Form */}
-      <div className="max-w-4xl mx-auto px-4 py-8">
+      {/* Content */}
+      <div className="relative page-content">
         {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
-            <AlertCircle size={20} className="text-red-600" />
-            <p className="text-red-700">{error}</p>
+          <div className="mb-6 flex items-center gap-3 p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
+            <AlertCircle size={20} className="text-red-400 flex-shrink-0" />
+            <p className="text-red-400">{error}</p>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="max-w-4xl space-y-6">
           {/* Session Details */}
-          <div className="bg-white rounded-xl border border-slate-200 p-6">
-            <h2 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
-              <Gamepad2 size={20} className="text-purple-600" />
+          <div className="card p-6">
+            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <Gamepad2 size={20} className="text-primary-400" />
               Session Details
             </h2>
             
             <div className="space-y-4">
-              {/* Session Name */}
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Session Name *
-                </label>
+                <label className="form-label">Session Name *</label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  className="form-input"
                   placeholder="e.g., Friday Night Game"
                   required
                 />
               </div>
 
-              {/* Game Selection */}
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Select Game *
-                </label>
+                <label className="form-label">Select Game *</label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {games.map((game) => (
                     <button
@@ -209,23 +200,23 @@ const SessionSetup = () => {
                       }}
                       className={`p-4 rounded-xl border-2 text-left transition-all ${
                         selectedGame?.id === game.id
-                          ? 'border-purple-500 bg-purple-50'
-                          : 'border-slate-200 hover:border-purple-300'
+                          ? 'border-primary-500 bg-primary-500/10'
+                          : 'border-slate-700 hover:border-slate-600'
                       }`}
                     >
                       <div className="flex items-start gap-3">
-                        <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center text-2xl">
+                        <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl flex-center text-2xl">
                           {game.icon}
                         </div>
                         <div className="flex-1">
-                          <h3 className="font-semibold text-slate-900">{game.name}</h3>
-                          <p className="text-sm text-slate-500">{game.description}</p>
-                          <p className="text-xs text-slate-400 mt-1">
+                          <h3 className="font-semibold text-slate-50">{game.name}</h3>
+                          <p className="text-sm text-slate-400">{game.description}</p>
+                          <p className="text-xs text-slate-500 mt-1">
                             {game.minPlayers}-{game.maxPlayers} players
                           </p>
                         </div>
                         {selectedGame?.id === game.id && (
-                          <CheckCircle size={20} className="text-purple-600" />
+                          <CheckCircle size={20} className="text-primary-400 flex-shrink-0" />
                         )}
                       </div>
                     </button>
@@ -233,34 +224,31 @@ const SessionSetup = () => {
                 </div>
               </div>
 
-              {/* Total Rounds */}
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Total Rounds
-                </label>
+                <label className="form-label">Total Rounds</label>
                 <input
                   type="number"
                   min="1"
                   max="50"
                   value={formData.totalRounds}
                   onChange={(e) => setFormData({...formData, totalRounds: e.target.value})}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  className="form-input w-32"
                 />
               </div>
             </div>
           </div>
 
           {/* Players */}
-          <div className="bg-white rounded-xl border border-slate-200 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                <Users size={20} className="text-purple-600" />
+          <div className="card p-6">
+            <div className="flex-between mb-4">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <Users size={20} className="text-primary-400" />
                 Players
               </h2>
               <button
                 type="button"
                 onClick={handleAddPlayer}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                className="btn-secondary"
               >
                 <Plus size={16} />
                 Add Player
@@ -270,7 +258,7 @@ const SessionSetup = () => {
             <div className="space-y-3">
               {players.map((player, index) => (
                 <div key={index} className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center text-sm font-medium text-slate-600">
+                  <div className="w-10 h-10 bg-slate-700 rounded-lg flex-center text-sm font-medium text-slate-300">
                     {index + 1}
                   </div>
                   <input
@@ -278,12 +266,12 @@ const SessionSetup = () => {
                     value={player.name}
                     onChange={(e) => handlePlayerChange(index, 'name', e.target.value)}
                     placeholder={`Player ${index + 1} name`}
-                    className="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    className="form-input flex-1"
                   />
                   <button
                     type="button"
                     onClick={() => handleRemovePlayer(index)}
-                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                    className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
                     disabled={players.length <= 1}
                   >
                     <Trash2 size={18} />
@@ -292,7 +280,7 @@ const SessionSetup = () => {
               ))}
             </div>
 
-            <p className="mt-4 text-sm text-slate-500">
+            <p className="mt-4 text-sm text-slate-400">
               {selectedGame ? (
                 <>Add {selectedGame.minPlayers}-{selectedGame.maxPlayers} players for {selectedGame.name}</>
               ) : (
@@ -301,21 +289,31 @@ const SessionSetup = () => {
             </p>
           </div>
 
-          {/* Submit */}
+          {/* Actions */}
           <div className="flex gap-4">
             <button
               type="button"
               onClick={() => navigate('/operator/sessions')}
-              className="px-6 py-3 border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition-colors"
+              className="btn-secondary"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 px-6 py-3 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn-primary flex-1"
             >
-              {loading ? 'Creating Session...' : 'Create Session'}
+              {loading ? (
+                <span className="flex items-center gap-2">
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Creating Session...
+                </span>
+              ) : (
+                'Create Session'
+              )}
             </button>
           </div>
         </form>
