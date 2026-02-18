@@ -10,12 +10,19 @@
  * Key Concepts:
  * - Physical cards are dealt and played in person
  * - This app only RECORDS what happened in the physical game
- * - The operator inputs: who won, what combinations were formed, points, etc.
+ * - The operator inputs: who won, what combinations they formed, points, etc.
  * - This class validates that recorded hands are valid Rummy combinations
  * - It calculates scores and maintains the ledger of who owes whom
  * 
+ * Player Count:
+ * - MINIMUM: 2 players required
+ * - MAXIMUM: No hardcoded limit - admin configures per session
+ * - Real-world consideration: A 54-card deck with jokers can support up to 4 players
+ *   (13 cards each), but this is a LEDGER app - you record physical games,
+ *   so the actual player count depends on what's physically happening
+ * 
  * Game Flow:
- * 1. Operator creates a session and adds players
+ * 1. Operator creates a session and adds players (admin decides player count)
  * 2. Physical game: Cards are dealt (this app can suggest random hands for recording)
  * 3. Physical game: Players play Rummy with real cards
  * 4. Operator records: who declared, what combinations they had, deadwood points
