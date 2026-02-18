@@ -7,20 +7,21 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "turbo run dev",
+    "dev": "npm run db:generate && turbo run dev",
     "dev:platform": "turbo run dev --filter=@funny-friends/platform",
     "dev:teen-patti": "turbo run dev --filter=@funny-friends/teen-patti",
     "dev:rummy": "turbo run dev --filter=@funny-friends/rummy",
-    "build": "turbo run build",
-    "build:platform": "turbo run build --filter=@funny-friends/platform",
+    "build": "npm run db:generate && turbo run build",
+    "build:platform": "npm run db:generate && turbo run build --filter=@funny-friends/platform",
     "build:games": "turbo run build --filter='@funny-friends/*' --filter=!@funny-friends/platform",
     "start": "cd packages/platform/server && npm start",
     "lint": "turbo run lint",
-    "db:push": "turbo run db:push --filter=@funny-friends/platform-server",
-    "db:generate": "turbo run db:generate --filter=@funny-friends/platform-server",
-    "db:studio": "turbo run db:studio --filter=@funny-friends/platform-server",
+    "db:push": "cd packages/platform/server && npx prisma db push",
+    "db:generate": "cd packages/platform/server && npx prisma generate",
+    "db:studio": "cd packages/platform/server && npx prisma studio",
     "clean": "turbo run clean && rm -rf node_modules",
-    "render-build": "npm install && cd packages/platform/client && npm run build && cd ../server && npx prisma generate"
+    "render-build": "npm install && npm run build:platform",
+    "postinstall": "npm run db:generate"
   },
   "engines": {
     "node": ">=18.0.0"
