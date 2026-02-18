@@ -99,6 +99,166 @@ main (production - platform + all games)
   - Game-specific bug fixes
   - Independent game testing
 
+---
+
+## Plugin Architecture (NEW)
+
+The platform now uses a **Plugin-Based Architecture** for games. This enables:
+
+✅ **Add games without modifying platform code**  
+✅ **Auto-discovery of game plugins**  
+✅ **Uniform treatment of all games**  
+✅ **Hot-reloading for development**  
+✅ **Plugin versioning and isolation**
+
+### How It Works
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      PLATFORM CORE                          │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐  │
+│  │   Auth       │  │    API       │  │  Plugin Registry │  │
+│  └──────────────┘  └──────────────┘  └──────────────────┘  │
+│                                                             │
+│  ┌───────────────────────────────────────────────────────┐ │
+│  │              Plugin Interface Layer                    │ │
+│  │   createSession() | handleAction() | getPublicState() │ │
+│  └───────────────────────────────────────────────────────┘ │
+└─────────────────────────┬───────────────────────────────────┘
+                          │ Plugin Registry
+        ┌─────────────────┼─────────────────┐
+        │                 │                 │
+   ┌────▼────┐       ┌────▼────┐       ┌────▼────┐
+   │ Teen    │       │ Rummy   │       │ Poker   │
+   │ Patti   │       │ Plugin  │       │ Plugin  │
+   │ Plugin  │       │         │       │         │
+   └─────────┘       └─────────┘       └─────────┘
+```
+
+### Plugin Interface
+
+All games must implement the `GamePlugin` interface:
+
+```javascript
+class GamePlugin {
+  // Required Methods
+  metadata()           // Return game info (id, name, version, etc.)
+  createSession()      // Initialize new game session
+  handleAction()       // Process player actions
+  getPublicState()     // Get state visible to all
+  getPlayerState()     // Get state for specific player
+  serialize()          // Save state for persistence
+  deserialize()        // Restore state from persistence
+  
+  // Optional Methods
+  addPlayer()          // Add player to session
+  removePlayer()       // Remove player from session
+  startGame()          // Begin the game
+  endGame()            // End the game
+  validateConfig()     // Validate configuration
+}
+```
+
+### Adding a New Game (Plugin Method)
+
+**Step 1: Create Game Package**
+```bash
+mkdir -p packages/poker/server
+touch packages/poker/server/GamePlugin.js
+```
+
+**Step 2: Implement Plugin Interface**
+```javascript
+// packages/poker/server/GamePlugin.js
+const EventEmitter = require('events');
+
+class PokerPlugin extends EventEmitter {
+  metadata() {
+    return {
+      id: 'poker',
+      name: 'Texas Hold\'em Poker',
+      version: '1.0.0',
+      minPlayers: 2,
+      maxPlayers: 10,
+      defaultConfig: { smallBlind: 10, bigBlind: 20 }
+    };
+  }
+  
+  createSession(sessionId, name, config) {
+    // Initialize game state
+    this.sessions.set(sessionId, { /* ... */ });
+  }
+  
+  handleAction(sessionId, playerId, action) {
+    // Process game action
+    // Return result
+  }
+  
+  // ... implement other required methods
+}
+
+module.exports = PokerPlugin;
+```
+
+**Step 3: That's It!**
+
+The platform automatically:
+- Discovers the plugin on startup
+- Registers it in the Plugin Registry
+- Syncs metadata to the database
+- Makes it available for session creation
+
+**No platform code changes required!**
+
+### Plugin Auto-Discovery
+
+On server startup, the platform scans `packages/` directory:
+
+```javascript
+// packages/platform/server/plugins/index.js
+const packages = fs.readdirSync('packages/')
+  .filter(dir => dir !== 'platform' && dir !== 'shared');
+
+packages.forEach(pkg => {
+  const pluginPath = `packages/${pkg}/server/GamePlugin.js`;
+  if (fs.existsSync(pluginPath)) {
+    const Plugin = require(pluginPath);
+    registry.register(new Plugin());
+  }
+});
+```
+
+### Database Schema for Plugins
+
+The database schema is now **completely generic**:
+
+- **GameType** - Plugin metadata (id, name, version, config schema)
+- **GameSession** - Generic container with `config` JSON field
+- **GameState** - Serialized plugin state
+- **GameRound** - Generic round data
+- **Transaction** - Generic ledger entries (WIN, LOSS, BET, etc.)
+- **GameEvent** - Complete audit trail
+
+No game-specific fields!
+
+### Benefits
+
+| Before (Hardcoded) | After (Plugin) |
+|-------------------|----------------|
+| Modify 5+ files to add game | Drop in one file |
+| Platform knows game internals | Platform only knows interface |
+| Database schema changes needed | No schema changes |
+| Single game version | Per-game versioning |
+| Restart server to update | Hot-reload in development |
+
+### Migration Notes
+
+See `MIGRATION_GUIDE.md` for:
+- Schema changes from old to new architecture
+- Data migration SQL scripts
+- Updating existing games to Plugin interface
+- Rollback procedures
+
 ## Workflow
 
 ### Adding a New Game
