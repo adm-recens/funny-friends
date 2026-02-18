@@ -13,10 +13,10 @@
     "start": "cd packages/platform/server && node server.js",
     "postinstall": "npm run db:generate",
     "lint": "turbo run lint",
-    "db:push": "cd packages/platform/server && npx prisma@5.22.0 db push",
-    "db:generate": "cd packages/platform/server && npx prisma@5.22.0 generate",
+    "db:push": "cd packages/platform/server && npx prisma db push",
+    "db:generate": "cd packages/platform/server && npx prisma generate",
     "db:seed": "cd packages/platform/server && node scripts/seed-games.js",
-    "db:studio": "cd packages/platform/server && npx prisma@5.22.0 studio",
+    "db:studio": "cd packages/platform/server && npx prisma studio",
     "clean": "rm -rf node_modules"
   },
   "engines": {
@@ -33,7 +33,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "prisma": "5.22.0",
+    "prisma": "^7.4.0",
     "vite": "^7.2.4",
     "@vitejs/plugin-react": "^5.1.1",
     "react": "^19.2.0",
@@ -49,7 +49,7 @@
     "turbo": "^2.0.0"
   },
   "resolutions": {
-    "@prisma/client": "5.22.0",
-    "prisma": "5.22.0"
+    "@prisma/client": "^7.4.0",
+    "prisma": "^7.4.0"
   }
 }
