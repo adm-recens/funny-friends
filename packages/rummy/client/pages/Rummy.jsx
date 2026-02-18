@@ -72,7 +72,7 @@ const Rummy = () => {
                                 <Sparkles size={24} className="text-orange-400" />
                             </div>
                             <h3 className="font-bold text-white mb-2">Multiplayer</h3>
-                            <p className="text-slate-400 text-sm">2-6 players supported</p>
+                            <p className="text-slate-400 text-sm">2+ players, configurable</p>
                         </div>
                     </div>
 
