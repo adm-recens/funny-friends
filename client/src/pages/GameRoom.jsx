@@ -383,7 +383,7 @@ const GameRoom = () => {
 
     // 3. Setup Phase (Operator/Admin Only)
     const activePlayer = gamePlayers[activePlayerIndex];
-    const isOperatorOrAdmin = user?.role === 'OPERATOR' || user?.role === 'ADMIN';
+    // isOperatorOrAdmin already declared above for viewer check
     if (phase === 'SETUP' && isOperatorOrAdmin) {
         return (
             <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans">
