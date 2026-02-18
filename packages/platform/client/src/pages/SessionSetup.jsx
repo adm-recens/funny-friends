@@ -135,61 +135,61 @@ const SessionSetup = () => {
   };
 
   return (
-    <div className="page-container">
+    <div className="min-h-screen bg-slate-900">
       {/* Background gradient */}
-      <div className="fixed inset-0 bg-gradient-radial from-primary-900/20 via-slate-900 to-slate-900" />
+      <div className="fixed inset-0 bg-gradient-radial from-violet-900/20 via-slate-900 to-slate-900" />
       
       {/* Header */}
       <div className="relative border-b border-slate-800">
-        <div className="page-content">
-          <div className="flex items-center gap-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             <button
               onClick={() => navigate('/operator/sessions')}
-              className="btn-ghost p-2"
+              className="p-2 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded-lg transition-colors"
             >
               <ArrowLeft size={20} />
             </button>
             <div>
-              <h1 className="text-2xl font-bold">Create New Session</h1>
-              <p className="text-slate-400">Set up a new game session</p>
+              <h1 className="text-lg sm:text-2xl font-bold text-slate-50">Create New Session</h1>
+              <p className="text-slate-400 text-xs sm:text-sm hidden sm:block">Set up a new game session</p>
             </div>
           </div>
         </div>
       </div>
 
       {/* Content */}
-      <div className="relative page-content">
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
         {error && (
-          <div className="mb-6 flex items-center gap-3 p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
-            <AlertCircle size={20} className="text-red-400 flex-shrink-0" />
-            <p className="text-red-400">{error}</p>
+          <div className="mb-4 sm:mb-6 flex items-center gap-3 p-3 sm:p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
+            <AlertCircle size={18} className="text-red-400 flex-shrink-0" />
+            <p className="text-red-400 text-sm">{error}</p>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="max-w-4xl space-y-6">
+        <form onSubmit={handleSubmit} className="max-w-4xl space-y-4 sm:space-y-6">
           {/* Session Details */}
-          <div className="card p-6">
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <Gamepad2 size={20} className="text-primary-400" />
+          <div className="bg-slate-800 rounded-xl border border-slate-700 p-4 sm:p-6">
+            <h2 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 flex items-center gap-2 text-slate-50">
+              <Gamepad2 size={18} className="text-violet-400" />
               Session Details
             </h2>
             
             <div className="space-y-4">
               <div>
-                <label className="form-label">Session Name *</label>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Session Name *</label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  className="form-input"
+                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-700 border border-slate-600 rounded-lg text-slate-50 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm sm:text-base"
                   placeholder="e.g., Friday Night Game"
                   required
                 />
               </div>
 
               <div>
-                <label className="form-label">Select Game *</label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label className="block text-sm font-medium text-slate-300 mb-2">Select Game *</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   {games.map((game) => (
                     <button
                       key={game.id}
@@ -198,25 +198,25 @@ const SessionSetup = () => {
                         setSelectedGame(game);
                         setFormData({...formData, gameCode: game.code});
                       }}
-                      className={`p-4 rounded-xl border-2 text-left transition-all ${
+                      className={`p-3 sm:p-4 rounded-xl border-2 text-left transition-all ${
                         selectedGame?.id === game.id
-                          ? 'border-primary-500 bg-primary-500/10'
+                          ? 'border-violet-500 bg-violet-500/10'
                           : 'border-slate-700 hover:border-slate-600'
                       }`}
                     >
                       <div className="flex items-start gap-3">
-                        <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl flex-center text-2xl">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-violet-500 to-violet-700 rounded-xl flex items-center justify-center text-xl sm:text-2xl flex-shrink-0">
                           {game.icon}
                         </div>
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-slate-50">{game.name}</h3>
-                          <p className="text-sm text-slate-400">{game.description}</p>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-slate-50 text-sm sm:text-base">{game.name}</h3>
+                          <p className="text-xs sm:text-sm text-slate-400 line-clamp-2">{game.description}</p>
                           <p className="text-xs text-slate-500 mt-1">
                             {game.minPlayers}-{game.maxPlayers} players
                           </p>
                         </div>
                         {selectedGame?.id === game.id && (
-                          <CheckCircle size={20} className="text-primary-400 flex-shrink-0" />
+                          <CheckCircle size={18} className="text-violet-400 flex-shrink-0" />
                         )}
                       </div>
                     </button>
@@ -225,40 +225,40 @@ const SessionSetup = () => {
               </div>
 
               <div>
-                <label className="form-label">Total Rounds</label>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Total Rounds</label>
                 <input
                   type="number"
                   min="1"
                   max="50"
                   value={formData.totalRounds}
                   onChange={(e) => setFormData({...formData, totalRounds: e.target.value})}
-                  className="form-input w-32"
+                  className="w-24 sm:w-32 px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-700 border border-slate-600 rounded-lg text-slate-50 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm sm:text-base"
                 />
               </div>
             </div>
           </div>
 
           {/* Players */}
-          <div className="card p-6">
-            <div className="flex-between mb-4">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <Users size={20} className="text-primary-400" />
+          <div className="bg-slate-800 rounded-xl border border-slate-700 p-4 sm:p-6">
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
+              <h2 className="text-base sm:text-lg font-semibold flex items-center gap-2 text-slate-50">
+                <Users size={18} className="text-violet-400" />
                 Players
               </h2>
               <button
                 type="button"
                 onClick={handleAddPlayer}
-                className="btn-secondary"
+                className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded-lg transition-colors text-xs sm:text-sm font-medium"
               >
-                <Plus size={16} />
+                <Plus size={14} />
                 Add Player
               </button>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2 sm:space-y-3">
               {players.map((player, index) => (
-                <div key={index} className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-slate-700 rounded-lg flex-center text-sm font-medium text-slate-300">
+                <div key={index} className="flex items-center gap-2 sm:gap-3">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-slate-700 rounded-lg flex items-center justify-center text-xs sm:text-sm font-medium text-slate-300 flex-shrink-0">
                     {index + 1}
                   </div>
                   <input
@@ -266,21 +266,21 @@ const SessionSetup = () => {
                     value={player.name}
                     onChange={(e) => handlePlayerChange(index, 'name', e.target.value)}
                     placeholder={`Player ${index + 1} name`}
-                    className="form-input flex-1"
+                    className="flex-1 px-3 sm:px-4 py-2 sm:py-2.5 bg-slate-700 border border-slate-600 rounded-lg text-slate-50 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm sm:text-base"
                   />
                   <button
                     type="button"
                     onClick={() => handleRemovePlayer(index)}
-                    className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                    className="p-1.5 sm:p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors flex-shrink-0"
                     disabled={players.length <= 1}
                   >
-                    <Trash2 size={18} />
+                    <Trash2 size={16} />
                   </button>
                 </div>
               ))}
             </div>
 
-            <p className="mt-4 text-sm text-slate-400">
+            <p className="mt-3 sm:mt-4 text-xs sm:text-sm text-slate-400">
               {selectedGame ? (
                 <>Add {selectedGame.minPlayers}-{selectedGame.maxPlayers} players for {selectedGame.name}</>
               ) : (
@@ -290,21 +290,21 @@ const SessionSetup = () => {
           </div>
 
           {/* Actions */}
-          <div className="flex gap-4">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
             <button
               type="button"
               onClick={() => navigate('/operator/sessions')}
-              className="btn-secondary"
+              className="px-4 sm:px-6 py-2.5 sm:py-3 border border-slate-600 text-slate-300 font-medium rounded-lg hover:bg-slate-800 transition-colors text-sm sm:text-base order-2 sm:order-1"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="btn-primary flex-1"
+              className="flex-1 px-4 sm:px-6 py-2.5 sm:py-3 bg-violet-600 hover:bg-violet-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base order-1 sm:order-2"
             >
               {loading ? (
-                <span className="flex items-center gap-2">
+                <span className="flex items-center justify-center gap-2">
                   <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
