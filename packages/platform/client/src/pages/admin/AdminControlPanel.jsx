@@ -5,7 +5,7 @@ import {
   Bell, LogOut, Menu, X, ChevronRight, Activity,
   UserCog, Key, BarChart3, Database
 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../../context/AuthContext';
 
 const AdminControlPanel = () => {
   const navigate = useNavigate();

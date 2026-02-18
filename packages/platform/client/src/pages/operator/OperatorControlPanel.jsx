@@ -5,7 +5,7 @@ import {
   Bell, LogOut, Menu, X, ChevronRight, Activity,
   Shield, BarChart3, Clock
 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../../context/AuthContext';
 
 const OperatorControlPanel = () => {
   const navigate = useNavigate();

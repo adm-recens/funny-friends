@@ -12,12 +12,20 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const cookieParser = require('cookie-parser');
 const morgan = require('morgan');
-const TeenPattiGameManager = require('./game/GameManager');
-
-// Try to load RummyGameManager, fallback to null if not available
+// Try to load GameManagers, fallback to null if not available
+let TeenPattiGameManager = null;
 let RummyGameManager = null;
+
+try {
+  TeenPattiGameManager = require('./game/GameManager');
+  console.log('[INFO] Teen Patti game manager loaded');
+} catch (e) {
+  console.log('[INFO] Teen Patti game not available:', e.message);
+}
+
 try {
   RummyGameManager = require('../../rummy/server/GameManager');
+  console.log('[INFO] Rummy game manager loaded');
 } catch (e) {
   console.log('[INFO] Rummy game not available:', e.message);
 }

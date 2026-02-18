@@ -1,4 +1,4 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
@@ -8,16 +8,8 @@ import { API_URL } from './config';
 import Welcome from './pages/Welcome';
 import Login from './pages/Login';
 import Logout from './pages/Logout';
-import SessionSetup from './pages/SessionSetup';
-import GameRoom from './pages/GameRoom';
-import Viewer from './pages/Viewer';
-import Rummy from './pages/Rummy';
 import Setup from './pages/Setup';
 import Profile from './pages/Profile';
-import TeenPattiHelp from './pages/TeenPattiHelp';
-
-// Lazy load RummyGameRoom - it's an optional game module
-const RummyGameRoom = lazy(() => import('../../../rummy/client/pages/GameRoom').catch(() => ({ default: Rummy })));
 
 // Admin Control Panel
 import AdminControlPanel from './pages/admin/AdminControlPanel';
@@ -100,37 +92,6 @@ const AppRoutes = () => {
         </SetupCheck>
       } />
       <Route path="/logout" element={<Logout />} />
-      <Route path="/viewer/:sessionName" element={<Viewer />} />
-      <Route path="/rummy" element={<Rummy />} />
-      <Route path="/help" element={<TeenPattiHelp />} />
-
-      {/* Protected Routes - Any logged in user */}
-      <Route
-        path="/setup"
-        element={
-          <ProtectedRoute requireOperator={true}>
-            <SessionSetup />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/game/:sessionName"
-        element={
-          <ProtectedRoute>
-            <GameRoom />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/rummy/game/:sessionName"
-        element={
-          <ProtectedRoute>
-            <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div>Loading...</div></div>}>
-              <RummyGameRoom />
-            </Suspense>
-          </ProtectedRoute>
-        }
-      />
       
       {/* Admin Control Panel Routes */}
       <Route
