@@ -20,8 +20,7 @@
     "db:generate": "cd packages/platform/server && npx prisma generate",
     "db:studio": "cd packages/platform/server && npx prisma studio",
     "clean": "turbo run clean && rm -rf node_modules",
-    "render-build": "npm install && npm run build:platform",
-    "postinstall": "npm run db:generate"
+    "render-build": "npm install && npm run db:generate && turbo run build --filter=@funny-friends/platform"
   },
   "engines": {
     "node": ">=18.0.0"
