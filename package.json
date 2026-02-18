@@ -8,15 +8,15 @@
   ],
   "scripts": {
     "dev": "npm run db:generate && turbo run dev",
-    "build": "npm run db:generate && npm run build:client",
+    "build": "npm run db:generate && npm run db:push && npm run db:seed && npm run build:client",
     "build:client": "cd packages/platform/client && npm run build",
     "start": "cd packages/platform/server && node server.js",
-    "postinstall": "npm run db:generate && npm run db:push && npm run db:seed",
+    "postinstall": "npm run db:generate",
     "lint": "turbo run lint",
-    "db:push": "cd packages/platform/server && npx prisma db push",
-    "db:generate": "cd packages/platform/server && npx prisma generate",
+    "db:push": "cd packages/platform/server && npx prisma@5.22.0 db push",
+    "db:generate": "cd packages/platform/server && npx prisma@5.22.0 generate",
     "db:seed": "cd packages/platform/server && node scripts/seed-games.js",
-    "db:studio": "cd packages/platform/server && npx prisma studio",
+    "db:studio": "cd packages/platform/server && npx prisma@5.22.0 studio",
     "clean": "rm -rf node_modules"
   },
   "engines": {
@@ -32,6 +32,9 @@
   ],
   "author": "",
   "license": "MIT",
+  "dependencies": {
+    "prisma": "5.22.0"
+  },
   "devDependencies": {
     "turbo": "^2.0.0"
   },
