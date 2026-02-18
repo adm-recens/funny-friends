@@ -20,9 +20,11 @@ services:
   - type: web
     name: funny-friends
     runtime: node
-    buildCommand: npm install && npm run build:platform
+    region: oregon
+    plan: free
+    buildCommand: npm install && npm run db:generate && npm run build:client
+    preDeployCommand: npm run db:push && npm run db:seed
     startCommand: npm start
-    preDeployCommand: npm run db:push
     envVars:
       - key: NODE_ENV
         value: production
