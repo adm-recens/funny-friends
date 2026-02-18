@@ -1,0 +1,26 @@
+{
+  "name": "@funny-friends/teen-patti-client",
+  "description": "Teen Patti Game - React Components",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./pages/index.js",
+  "exports": {
+    ".": "./pages/index.js",
+    "./pages/*": "./pages/*"
+  },
+  "scripts": {
+    "clean": "rm -rf node_modules"
+  },
+  "dependencies": {
+    "@funny-friends/shared": "^1.0.0",
+    "@funny-friends/platform-client": "^2.0.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "lucide-react": "^0.554.0"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "license": "MIT"
+}

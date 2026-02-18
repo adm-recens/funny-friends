@@ -1,15 +1,26 @@
 {
-  "name": "funny-friends",
+  "name": "@funny-friends/root",
   "version": "2.0.0",
   "description": "Funny Friends - A platform where friends gather to play card games",
-  "main": "server/server.js",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "concurrently \"npm run server\" \"npm run client\"",
-    "server": "cd server && npm run dev",
-    "client": "cd client && npm run dev",
-    "build": "cd client && npm run build",
-    "start": "cd server && npm start",
-    "render-build": "cd server && npm ci && npx prisma generate && cd ../client && npm ci --include=dev && npm run build"
+    "dev": "turbo run dev",
+    "dev:platform": "turbo run dev --filter=@funny-friends/platform",
+    "dev:teen-patti": "turbo run dev --filter=@funny-friends/teen-patti",
+    "dev:rummy": "turbo run dev --filter=@funny-friends/rummy",
+    "build": "turbo run build",
+    "build:platform": "turbo run build --filter=@funny-friends/platform",
+    "build:games": "turbo run build --filter='@funny-friends/*' --filter=!@funny-friends/platform",
+    "start": "turbo run start --filter=@funny-friends/platform",
+    "lint": "turbo run lint",
+    "db:push": "turbo run db:push --filter=@funny-friends/platform-server",
+    "db:generate": "turbo run db:generate --filter=@funny-friends/platform-server",
+    "db:studio": "turbo run db:studio --filter=@funny-friends/platform-server",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "render-build": "npm install && turbo run render-build"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -17,13 +28,15 @@
   "keywords": [
     "games",
     "teen-patti",
+    "rummy",
     "cards",
     "multiplayer",
-    "friends"
+    "monorepo"
   ],
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "concurrently": "^8.2.0"
-  }
+    "turbo": "^2.0.0"
+  },
+  "packageManager": "npm@10.0.0"
 }
