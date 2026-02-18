@@ -10,14 +10,26 @@ import Login from './pages/Login';
 import Logout from './pages/Logout';
 import SessionSetup from './pages/SessionSetup';
 import GameRoom from './pages/GameRoom';
-import AdminDashboard from './pages/AdminDashboard';
-import OperatorDashboard from './pages/OperatorDashboard';
 import Viewer from './pages/Viewer';
 import Rummy from './pages/Rummy';
 import RummyGameRoom from '../../../rummy/client/pages/GameRoom';
 import Setup from './pages/Setup';
 import Profile from './pages/Profile';
 import TeenPattiHelp from './pages/TeenPattiHelp';
+
+// Admin Control Panel
+import AdminControlPanel from './pages/admin/AdminControlPanel';
+import AdminDashboardOverview from './pages/admin/AdminDashboardOverview';
+import UserManagement from './pages/admin/UserManagement';
+import PermissionsManagement from './pages/admin/PermissionsManagement';
+import PlatformSettings from './pages/admin/PlatformSettings';
+
+// Operator Control Panel
+import OperatorControlPanel from './pages/operator/OperatorControlPanel';
+import OperatorDashboardOverview from './pages/operator/OperatorDashboardOverview';
+import OperatorSessions from './pages/operator/OperatorSessions';
+import OperatorGames from './pages/operator/OperatorGames';
+import OperatorProfile from './pages/operator/OperatorProfile';
 
 // Setup Check Component
 const SetupCheck = ({ children }) => {
@@ -73,6 +85,7 @@ const ProtectedRoute = ({ children, requireOperator = false, requireAdmin = fals
 const AppRoutes = () => {
   return (
     <Routes>
+      {/* Public Routes */}
       <Route path="/system-setup" element={<Setup />} />
       <Route path="/" element={
         <SetupCheck>
@@ -115,25 +128,45 @@ const AppRoutes = () => {
         }
       />
       
-      {/* Operator Routes */}
-      <Route
-        path="/operator-dashboard"
-        element={
-          <ProtectedRoute requireOperator={true}>
-            <OperatorDashboard />
-          </ProtectedRoute>
-        }
-      />
-      
-      {/* Admin Routes */}
+      {/* Admin Control Panel Routes */}
       <Route
         path="/admin"
         element={
           <ProtectedRoute requireAdmin={true}>
-            <AdminDashboard />
+            <AdminControlPanel />
           </ProtectedRoute>
         }
-      />
+      >
+        <Route index element={<Navigate to="/admin/dashboard" replace />} />
+        <Route path="dashboard" element={<AdminDashboardOverview />} />
+        <Route path="users" element={<UserManagement />} />
+        <Route path="permissions" element={<PermissionsManagement />} />
+        <Route path="games" element={<AdminDashboardOverview />} />
+        <Route path="settings" element={<PlatformSettings />} />
+        <Route path="monitoring" element={<AdminDashboardOverview />} />
+      </Route>
+
+      {/* Legacy Admin Route - Redirect to new control panel */}
+      <Route path="/admin-old" element={<Navigate to="/admin/dashboard" replace />} />
+      
+      {/* Operator Control Panel Routes */}
+      <Route
+        path="/operator"
+        element={
+          <ProtectedRoute requireOperator={true}>
+            <OperatorControlPanel />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<Navigate to="/operator/dashboard" replace />} />
+        <Route path="dashboard" element={<OperatorDashboardOverview />} />
+        <Route path="sessions" element={<OperatorSessions />} />
+        <Route path="games" element={<OperatorGames />} />
+        <Route path="profile" element={<OperatorProfile />} />
+      </Route>
+
+      {/* Legacy Operator Dashboard - Redirect to new control panel */}
+      <Route path="/operator-dashboard" element={<Navigate to="/operator/dashboard" replace />} />
       
       {/* Profile Route - Any logged in user */}
       <Route
