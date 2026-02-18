@@ -101,6 +101,33 @@ class GameManager extends EventEmitter {
             sideShowRequest: null, // { requesterId, targetId }
             showRequest: null // { requester, target, isForceShow }
         };
+        
+        // F1 FIX: Track timeouts for show/side-show requests
+        this.requestTimeouts = new Map();
+        this.REQUEST_TIMEOUT_MS = 60000; // 60 seconds timeout
+    }
+    
+    // F1 FIX: Clear all pending request timeouts
+    clearRequestTimeouts() {
+        for (const [key, timeoutId] of this.requestTimeouts) {
+            clearTimeout(timeoutId);
+        }
+        this.requestTimeouts.clear();
+    }
+    
+    // F1 FIX: Set timeout for a request
+    setRequestTimeout(requestType, callback) {
+        // Clear existing timeout for this request type
+        if (this.requestTimeouts.has(requestType)) {
+            clearTimeout(this.requestTimeouts.get(requestType));
+        }
+        
+        const timeoutId = setTimeout(() => {
+            this.requestTimeouts.delete(requestType);
+            callback();
+        }, this.REQUEST_TIMEOUT_MS);
+        
+        this.requestTimeouts.set(requestType, timeoutId);
     }
 
     // --- SETUP ---
@@ -184,6 +211,15 @@ class GameManager extends EventEmitter {
     // --- ACTIONS ---
     handleAction(action) {
         // action: { type, playerId, ...payload }
+        
+        // F1 FIX: Allow cancel actions even if not the active player's turn
+        if (action.type === 'CANCEL_SIDE_SHOW') {
+            return this.cancelSideShow();
+        }
+        if (action.type === 'CANCEL_SHOW') {
+            return this.cancelShow();
+        }
+        
         if (this.gameState.phase !== 'ACTIVE') return { success: false, error: "Game not active" };
 
         const activePlayer = this.gameState.gamePlayers[this.gameState.activePlayerIndex];
@@ -275,8 +311,34 @@ class GameManager extends EventEmitter {
         // Create side show request for operator to resolve
         this.gameState.sideShowRequest = { 
             requester: player, 
-            target: target
+            target: target,
+            timestamp: Date.now()
         };
+        
+        // F1 FIX: Set timeout for side show request
+        this.setRequestTimeout('sideShow', () => {
+            this.gameState.currentLogs.push(`Side Show request timed out after ${this.REQUEST_TIMEOUT_MS / 1000}s`);
+            this.cancelSideShow();
+        });
+        
+        this.emit('state_change', this.getPublicState());
+        return { success: true };
+    }
+    
+    // F1 FIX: Cancel side show request
+    cancelSideShow() {
+        if (!this.gameState.sideShowRequest) return { success: false, error: "No side show request to cancel" };
+        
+        const { requester } = this.gameState.sideShowRequest;
+        
+        // Clear timeout
+        if (this.requestTimeouts.has('sideShow')) {
+            clearTimeout(this.requestTimeouts.get('sideShow'));
+            this.requestTimeouts.delete('sideShow');
+        }
+        
+        this.gameState.sideShowRequest = null;
+        this.gameState.currentLogs.push(`${requester.name}'s Side Show request was cancelled`);
         
         this.emit('state_change', this.getPublicState());
         return { success: true };
@@ -284,6 +346,12 @@ class GameManager extends EventEmitter {
 
     resolveSideShow(winnerId) {
         if (!this.gameState.sideShowRequest) return { success: false, error: "No side show request" };
+        
+        // F1 FIX: Clear the timeout when resolved
+        if (this.requestTimeouts.has('sideShow')) {
+            clearTimeout(this.requestTimeouts.get('sideShow'));
+            this.requestTimeouts.delete('sideShow');
+        }
         
         const { requester, target } = this.gameState.sideShowRequest;
         
@@ -349,7 +417,8 @@ class GameManager extends EventEmitter {
         this.gameState.showRequest = { 
             requester: player, 
             target: target,
-            isForceShow: isForceShow
+            isForceShow: isForceShow,
+            timestamp: Date.now()
         };
         
         if (isForceShow) {
@@ -358,12 +427,43 @@ class GameManager extends EventEmitter {
             this.gameState.currentLogs.push(`${player.name} requested Show against ${target.name}`);
         }
         
+        // F1 FIX: Set timeout for show request
+        this.setRequestTimeout('show', () => {
+            this.gameState.currentLogs.push(`Show request timed out after ${this.REQUEST_TIMEOUT_MS / 1000}s`);
+            this.cancelShow();
+        });
+        
+        this.emit('state_change', this.getPublicState());
+        return { success: true };
+    }
+    
+    // F1 FIX: Cancel show request
+    cancelShow() {
+        if (!this.gameState.showRequest) return { success: false, error: "No show request to cancel" };
+        
+        const { requester, isForceShow } = this.gameState.showRequest;
+        
+        // Clear timeout
+        if (this.requestTimeouts.has('show')) {
+            clearTimeout(this.requestTimeouts.get('show'));
+            this.requestTimeouts.delete('show');
+        }
+        
+        this.gameState.showRequest = null;
+        this.gameState.currentLogs.push(`${requester.name}'s ${isForceShow ? 'Force Show' : 'Show'} request was cancelled`);
+        
         this.emit('state_change', this.getPublicState());
         return { success: true };
     }
 
     resolveShow(winnerId) {
         if (!this.gameState.showRequest) return { success: false, error: "No show request" };
+        
+        // F1 FIX: Clear the timeout when resolved
+        if (this.requestTimeouts.has('show')) {
+            clearTimeout(this.requestTimeouts.get('show'));
+            this.requestTimeouts.delete('show');
+        }
         
         const { requester, target, isForceShow } = this.gameState.showRequest;
         

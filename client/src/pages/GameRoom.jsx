@@ -102,7 +102,8 @@ const GameRoom = () => {
         });
 
         socket.on('viewer_requested', (req) => {
-            if (user?.role === 'OPERATOR') {
+            // D1 FIX: Allow both ADMIN and OPERATOR to see viewer requests
+            if (user?.role === 'OPERATOR' || user?.role === 'ADMIN') {
                 setViewerRequests(prev => {
                     if (prev.find(r => r.socketId === req.socketId)) return prev;
                     return [...prev, req];
@@ -590,11 +591,19 @@ const GameRoom = () => {
                             </button>
                         </div>
                         
-                        <div className="bg-yellow-50 p-4 rounded-xl text-center">
+                        <div className="bg-yellow-50 p-4 rounded-xl text-center mb-4">
                             <p className="text-yellow-700 text-sm">
                                 💡 Click on the player with the better hand
                             </p>
                         </div>
+                        
+                        {/* F1 FIX: Cancel button for Side Show */}
+                        <button 
+                            onClick={() => sendGameAction('CANCEL_SIDE_SHOW')}
+                            className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2"
+                        >
+                            <X size={18} /> Cancel Request
+                        </button>
                     </div>
                 </div>
             )}
@@ -649,11 +658,19 @@ const GameRoom = () => {
                             </button>
                         </div>
                         
-                        <div className="bg-yellow-50 p-4 rounded-xl text-center">
+                        <div className="bg-yellow-50 p-4 rounded-xl text-center mb-4">
                             <p className="text-yellow-700 text-sm">
                                 💡 Click on the player with the better hand
                             </p>
                         </div>
+                        
+                        {/* F1 FIX: Cancel button for Show */}
+                        <button 
+                            onClick={() => sendGameAction('CANCEL_SHOW')}
+                            className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2"
+                        >
+                            <X size={18} /> Cancel Request
+                        </button>
                     </div>
                 </div>
             )}

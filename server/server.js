@@ -1194,8 +1194,12 @@ app.get('/api/sessions/active', (req, res) => {
 });
 
 // 3. ADMIN API (requires admin authentication)
-app.get('/api/admin/sessions', requireAdmin, async (req, res) => {
+app.get('/api/admin/sessions', requireOperator, async (req, res) => {
+  // Filter sessions: Admins see all, Operators see only their own
+  const whereClause = req.user.role === 'ADMIN' ? {} : { createdBy: req.user.id };
+  
   const sessions = await prisma.gameSession.findMany({
+    where: whereClause,
     orderBy: { createdAt: 'desc' },
     include: { _count: { select: { hands: true } } }
   });
@@ -1280,6 +1284,11 @@ app.post('/api/admin/sessions/:name/end', requireOperator, async (req, res) => {
     const session = await prisma.gameSession.findUnique({ where: { name } });
     if (!session) return res.status(404).json({ error: "Session not found" });
 
+    // Operators can only end their own sessions, Admins can end any
+    if (req.user.role !== 'ADMIN' && session.createdBy !== req.user.id) {
+      return res.status(403).json({ error: "Access denied. You can only end your own sessions." });
+    }
+
     await prisma.gameSession.update({
       where: { id: session.id },
       data: { isActive: false }
@@ -1313,6 +1322,11 @@ app.get('/api/admin/sessions/:name', requireOperator, async (req, res) => {
     });
 
     if (!session) return res.status(404).json({ error: "Session not found" });
+
+    // Operators can only view their own sessions, Admins can view all
+    if (req.user.role !== 'ADMIN' && session.createdBy !== req.user.id) {
+      return res.status(403).json({ error: "Access denied. You can only view your own sessions." });
+    }
 
     res.json(session);
   } catch (e) {
@@ -1475,7 +1489,7 @@ app.post('/api/admin/player-requests/:id/resolve', requireAdmin, async (req, res
       // Add player to active GameManager if session is active
       const manager = activeSessions.get(request.session.name);
       if (manager) {
-        manager.gameState.players.push({
+        const newPlayerData = {
           id: newPlayer.id,
           name: newPlayer.name,
           seat: newPlayer.seatPosition,
@@ -1483,7 +1497,24 @@ app.post('/api/admin/player-requests/:id/resolve', requireAdmin, async (req, res
           status: 'BLIND',
           folded: false,
           invested: 0
-        });
+        };
+        
+        manager.gameState.players.push(newPlayerData);
+
+        // E1 FIX: Synchronize gamePlayers with players
+        // If game is in SETUP phase, also add to gamePlayers for next round
+        // If game is ACTIVE, player will be included in next round via startRound
+        if (manager.gameState.phase === 'SETUP') {
+          // In SETUP phase, new player should be part of next hand
+          // Only add if not already in gamePlayers (safety check)
+          const existsInGamePlayers = manager.gameState.gamePlayers.some(p => p.id === newPlayer.id);
+          if (!existsInGamePlayers) {
+            manager.gameState.gamePlayers.push({
+              ...newPlayerData,
+              hand: null // Will be dealt when round starts
+            });
+          }
+        }
 
         // Emit update to all clients
         io.to(request.session.name).emit('game_update', manager.getPublicState());
@@ -1562,7 +1593,7 @@ app.post('/api/admin/sessions/:name/approve-all-players', requireAdmin, async (r
     const manager = activeSessions.get(name);
     if (manager) {
       for (const player of addedPlayers) {
-        manager.gameState.players.push({
+        const newPlayerData = {
           id: player.id,
           name: player.name,
           seat: player.seatPosition,
@@ -1570,7 +1601,20 @@ app.post('/api/admin/sessions/:name/approve-all-players', requireAdmin, async (r
           status: 'BLIND',
           folded: false,
           invested: 0
-        });
+        };
+        
+        manager.gameState.players.push(newPlayerData);
+        
+        // E1 FIX: Synchronize gamePlayers with players in SETUP phase
+        if (manager.gameState.phase === 'SETUP') {
+          const existsInGamePlayers = manager.gameState.gamePlayers.some(p => p.id === player.id);
+          if (!existsInGamePlayers) {
+            manager.gameState.gamePlayers.push({
+              ...newPlayerData,
+              hand: null
+            });
+          }
+        }
       }
       io.to(name).emit('game_update', manager.getPublicState());
     }
@@ -1661,6 +1705,8 @@ app.post('/api/sessions', requireAuth, asyncHandler(async (req, res) => {
 // --- IN-MEMORY STATE ---
 const activeSessions = new Map();
 const sessionLoaders = new Map(); // Track ongoing session loads to prevent race conditions
+const pendingViewerRequests = new Map(); // sessionName -> [{ socketId, name, timestamp }]
+const approvedViewers = new Map(); // sessionName -> Set of socket IDs
 
 // --- SOCKET MIDDLEWARE ---
 io.use((socket, next) => {
@@ -1756,7 +1802,19 @@ io.on('connection', (socket) => {
               // Hook up events (Ensure hooks are only added ONCE)
               // Note: Using a persistent manager means events persist.
               newManager.on('state_change', (state) => {
+                // Emit to all players and operators in the session
                 io.to(sessionName).emit('game_update', state);
+                
+                // Also emit to approved viewers
+                const approved = approvedViewers.get(sessionName);
+                if (approved) {
+                  approved.forEach(socketId => {
+                    const viewerSocket = io.sockets.sockets.get(socketId);
+                    if (viewerSocket) {
+                      viewerSocket.emit('game_update', state);
+                    }
+                  });
+                }
               });
               newManager.on('hand_complete', async (summary) => {
                 // Save hand to database
@@ -1846,8 +1904,17 @@ io.on('connection', (socket) => {
         const state = manager.getPublicState();
         console.log('[DEBUG] Sending game_update to operator. Phase:', state.phase, 'Players:', state.players.length, 'gamePlayers:', state.gamePlayers.length);
         socket.emit('game_update', state);
-        if (manager.viewerRequests) {
-          // manager.viewerRequests.forEach(req => socket.emit('viewer_requested', req)); // If mapped
+        
+        // D1 FIX: Send pending viewer requests to reconnected operators
+        const pendingRequests = pendingViewerRequests.get(sessionName);
+        if (pendingRequests && pendingRequests.length > 0) {
+          console.log(`[DEBUG] Sending ${pendingRequests.length} pending viewer requests to reconnected operator`);
+          pendingRequests.forEach(req => {
+            socket.emit('viewer_requested', {
+              socketId: req.socketId,
+              name: req.name
+            });
+          });
         }
       }
     } else {
@@ -1879,6 +1946,14 @@ io.on('connection', (socket) => {
       console.log('[DEBUG] Calling startRound()');
       const result = manager.startRound();
       console.log('[DEBUG] startRound result:', result);
+      if (!result.success) socket.emit('error_message', result.error);
+    } else if (action.type === 'CANCEL_SIDE_SHOW') {
+      // F1 FIX: Handle cancel side show
+      const result = manager.cancelSideShow();
+      if (!result.success) socket.emit('error_message', result.error);
+    } else if (action.type === 'CANCEL_SHOW') {
+      // F1 FIX: Handle cancel show
+      const result = manager.cancelShow();
       if (!result.success) socket.emit('error_message', result.error);
     } else {
       const result = manager.handleAction(action);
@@ -1935,8 +2010,111 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Viewer Access Control
+  socket.on('request_access', ({ sessionName, name }) => {
+    if (!sessionName || !name) {
+      socket.emit('error_message', 'Session name and viewer name are required');
+      return;
+    }
+
+    // Initialize pending requests for this session
+    if (!pendingViewerRequests.has(sessionName)) {
+      pendingViewerRequests.set(sessionName, []);
+    }
+
+    // Check if already requested
+    const requests = pendingViewerRequests.get(sessionName);
+    if (requests.find(r => r.socketId === socket.id)) {
+      return; // Already requested
+    }
+
+    // Add to pending requests
+    requests.push({
+      socketId: socket.id,
+      name: name,
+      timestamp: Date.now()
+    });
+
+    // Notify operators in the session
+    socket.to(sessionName).emit('viewer_requested', {
+      socketId: socket.id,
+      name: name
+    });
+
+    console.log(`[DEBUG] Viewer ${name} (${socket.id}) requested access to ${sessionName}`);
+  });
+
+  socket.on('resolve_access', ({ sessionName, viewerId, approved }) => {
+    if (!isOperatorOrAdmin()) {
+      socket.emit('error_message', 'Only operators can approve viewers');
+      return;
+    }
+
+    // Find and remove from pending
+    const requests = pendingViewerRequests.get(sessionName) || [];
+    const requestIndex = requests.findIndex(r => r.socketId === viewerId);
+    
+    if (requestIndex === -1) {
+      socket.emit('error_message', 'Viewer request not found');
+      return;
+    }
+
+    const request = requests[requestIndex];
+    requests.splice(requestIndex, 1);
+
+    // Get viewer socket
+    const viewerSocket = io.sockets.sockets.get(viewerId);
+    
+    if (approved) {
+      // Add to approved viewers
+      if (!approvedViewers.has(sessionName)) {
+        approvedViewers.set(sessionName, new Set());
+      }
+      approvedViewers.get(sessionName).add(viewerId);
+
+      // Notify viewer
+      if (viewerSocket) {
+        viewerSocket.emit('access_granted');
+        viewerSocket.join(sessionName);
+      }
+
+      // Send current game state to viewer
+      const manager = activeSessions.get(sessionName);
+      if (manager && viewerSocket) {
+        viewerSocket.emit('game_update', manager.getPublicState());
+      }
+
+      console.log(`[DEBUG] Viewer ${request.name} (${viewerId}) approved for ${sessionName}`);
+    } else {
+      // Notify viewer of denial
+      if (viewerSocket) {
+        viewerSocket.emit('access_denied');
+      }
+      console.log(`[DEBUG] Viewer ${request.name} (${viewerId}) denied for ${sessionName}`);
+    }
+  });
+
   socket.on('disconnect', () => {
-    // Cleanup if needed
+    // Cleanup viewer requests
+    for (const [sessionName, requests] of pendingViewerRequests.entries()) {
+      const index = requests.findIndex(r => r.socketId === socket.id);
+      if (index !== -1) {
+        requests.splice(index, 1);
+        if (requests.length === 0) {
+          pendingViewerRequests.delete(sessionName);
+        }
+      }
+    }
+
+    // Cleanup approved viewers
+    for (const [sessionName, viewers] of approvedViewers.entries()) {
+      if (viewers.has(socket.id)) {
+        viewers.delete(socket.id);
+        if (viewers.size === 0) {
+          approvedViewers.delete(sessionName);
+        }
+      }
+    }
   });
 });
 
