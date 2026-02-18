@@ -1,0 +1,45 @@
+{
+  "name": "funny-friends-server",
+  "version": "2.0.0",
+  "description": "Funny Friends Game Platform - Backend Server for multiplayer card games",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "nodemon server.js",
+    "start": "npx prisma db push && npx prisma generate && node scripts/seed-games.js && node server.js",
+    "db:push": "npx prisma db push",
+    "db:push:sqlite": "npx prisma db push --schema=prisma/schema.sqlite.prisma",
+    "db:migrate": "npx prisma migrate dev",
+    "db:studio": "npx prisma studio",
+    "db:seed": "node scripts/seed-games.js",
+    "db:generate": "npx prisma generate",
+    "db:generate:sqlite": "npx prisma generate --schema=prisma/schema.sqlite.prisma"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@prisma/client": "7.4.0",
+    "@prisma/adapter-pg": "7.4.0",
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "express-rate-limit": "^7.5.0",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.1",
+    "pg": "^8.14.0",
+    "prisma": "7.4.0",
+    "socket.io": "^4.8.1",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.11"
+  }
+}
