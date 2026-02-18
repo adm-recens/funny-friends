@@ -1,6 +1,21 @@
-# Funny Friends - Teen Patti Platform
+# Funny Friends - Game Ledger Platform
 
-A secure, professional-grade multiplayer platform for playing Teen Patti (Indian Poker) with friends. Built with production-ready security, real-time gameplay, and enterprise-level features.
+**IMPORTANT: This is a GAME LEDGER APPLICATION, not an online gaming platform.**
+
+Funny Friends is a digital ledger system designed to record and track physical card games played in person. Players use this application to replace traditional pen-and-paper or Excel-based scorekeeping methods. The actual card games are played physically with real cards - this app only records the scores, rounds, and financial settlements.
+
+**Key Concept**: Friends gather physically → Play with real cards → Use this app to record scores → Track who owes whom
+
+## 🎯 Purpose
+
+This application solves the problem of manual score tracking in physical card games by providing:
+- Digital record-keeping instead of paper/Excel
+- Real-time score updates as the physical game progresses
+- Automatic calculation of wins/losses and settlements
+- Historical tracking of all game sessions
+- Multi-game support (Teen Patti, Rummy, etc.)
+
+**The games are NOT played online - they are played in person with real cards!**
 
 [![Security Rating](https://img.shields.io/badge/security-A+-brightgreen)](SECURITY_AUDIT.md)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -11,12 +26,21 @@ A secure, professional-grade multiplayer platform for playing Teen Patti (Indian
 
 ## ✨ Key Features
 
-### 🃏 Teen Patti Game Features
-- **Complete Game Mechanics**: Boot, Chaal, Blind, Seen, Side Show, Force Show, Show
-- **Hand Rankings**: Trail, Pure Sequence, Sequence, Color, Pair, High Card with tie-breaker rules
-- **Smart Betting**: Automatic stake management, doubling, and custom bids
-- **Real-time Updates**: Live game state via WebSocket with sub-second latency
-- **Game History**: Persistent hand history with winner details and pot sizes
+### 📊 Ledger & Recording Features
+- **Digital Score Tracking**: Replace pen-and-paper or Excel with real-time digital recording
+- **Multi-Game Support**: Track Teen Patti, Rummy, and other card games
+- **Session Management**: Create game sessions for physical gatherings
+- **Real-time Updates**: All players see scores update as the physical game progresses
+- **Complete History**: Persistent record of all hands, rounds, and settlements
+- **Financial Tracking**: Automatic calculation of who owes whom at session end
+
+### 🃏 Game Recording Features
+- **Teen Patti Recording**: Track Boot, Chaal, Blind, Seen, Side Show, Show outcomes
+- **Rummy Recording**: Track sequences, sets, declarations, and deadwood points
+- **Hand Rankings**: Automatic validation of hand rankings (Trail, Pure Sequence, etc.)
+- **Round-by-Round Tracking**: Record each hand/round as it happens in the physical game
+- **Pot Management**: Track bets and winnings for accurate settlement
+- **Operator Control**: One person (operator) records while others play physically
 
 ### 👥 Multiplayer & Roles
 - **4 User Roles**: Admin, Operator, Player, Viewer
@@ -49,6 +73,36 @@ A secure, professional-grade multiplayer platform for playing Teen Patti (Indian
 - **Session Monitoring**: View active and ended sessions
 - **Player Requests**: Approve/decline player join requests
 - **System Reset**: Full database reset capability
+
+## 📋 How It Works (Ledger Workflow)
+
+### Physical Game Flow
+
+1. **Gather Physically**: Friends meet in person with a real deck of cards
+2. **Create Session**: Operator creates a game session in the app
+3. **Add Players**: All physical players are added to the digital session
+4. **Play with Real Cards**: The actual game happens with physical cards on a table
+5. **Record in App**: After each hand/round, the operator records the results
+6. **Track Scores**: App automatically calculates running totals and settlements
+7. **Session End**: Final settlements show who pays whom
+
+### Roles in the Ledger System
+
+- **Operator**: The person holding the device and recording the game while others play
+- **Players**: People physically playing cards (their scores are tracked)
+- **Viewers**: People watching the game (can see scores but don't play)
+- **Admin**: Manages the platform and creates operator accounts
+
+### Why Use This Instead of Excel/Paper?
+
+- **Real-time**: All players see scores update instantly on their phones
+- **Accurate**: Automatic calculations prevent math errors
+- **Historical**: Complete record of all past game sessions
+- **Multi-device**: Players can check scores on their own devices
+- **Professional**: Clean UI instead of messy spreadsheets
+- **Secure**: User authentication prevents score tampering
+
+**Remember**: The cards are real, the table is real, the players are real - only the scorekeeping is digital!
 
 ## 🚀 Quick Start
 

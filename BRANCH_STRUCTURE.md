@@ -1,5 +1,35 @@
 # Branch Structure Documentation
 
+## CRITICAL: This is a GAME LEDGER APPLICATION
+
+**⚠️ IMPORTANT CONTEXT FOR DEVELOPERS ⚠️**
+
+This is **NOT** an online gaming platform where people play games over the internet. This is a **DIGITAL LEDGER SYSTEM** for recording physical card games that people play in person.
+
+### What This Means
+
+- **Physical Games**: Players gather in person and use REAL cards on a REAL table
+- **Digital Recording**: One person (the operator) uses this app to record scores
+- **Score Tracking**: The app tracks who wins each hand, running totals, and final settlements
+- **No Online Gameplay**: There is no "playing" in the app - only recording what happened physically
+
+### Why This Architecture?
+
+- **GameManager Classes**: Validate hand rankings and calculate scores (not run game logic)
+- **Real-time Updates**: So all players can see scores on their phones as the operator records them
+- **Session Management**: Track a physical gathering from start to finish
+- **Ledger Features**: Financial tracking, history, settlements
+
+### For Future Development
+
+When adding features, remember:
+- **The game happens offline** - don't add "play" buttons or game controls
+- **Focus on recording** - how does the operator quickly input what happened?
+- **Validation, not execution** - validate that recorded hands are valid, don't "deal" cards
+- **Multi-viewer support** - multiple people should see the ledger simultaneously
+
+---
+
 ## Overview
 
 This repository uses a **Monorepo with Workspaces** structure to manage the platform and games separately. We use npm workspaces and Turborepo for build orchestration.

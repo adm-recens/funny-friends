@@ -1,3 +1,32 @@
+/**
+ * RUMMY GAME MANAGER - LEDGER SYSTEM
+ * 
+ * ⚠️ IMPORTANT: This is NOT an online game engine!
+ * 
+ * This class manages the digital ledger for recording physical Rummy games.
+ * Players play with REAL cards in person, and the operator uses this app
+ * to record scores, track rounds, and calculate settlements.
+ * 
+ * Key Concepts:
+ * - Physical cards are dealt and played in person
+ * - This app only RECORDS what happened in the physical game
+ * - The operator inputs: who won, what combinations were formed, points, etc.
+ * - This class validates that recorded hands are valid Rummy combinations
+ * - It calculates scores and maintains the ledger of who owes whom
+ * 
+ * Game Flow:
+ * 1. Operator creates a session and adds players
+ * 2. Physical game: Cards are dealt (this app can suggest random hands for recording)
+ * 3. Physical game: Players play Rummy with real cards
+ * 4. Operator records: who declared, what combinations they had, deadwood points
+ * 5. This class validates the declaration and calculates scores
+ * 6. All players see updated scores on their devices
+ * 7. Process repeats for each round
+ * 8. Final settlement shows who pays whom
+ * 
+ * This is a RECORD-KEEPING system, not a GAME-PLAYING system!
+ */
+
 const EventEmitter = require('events');
 
 // Card utilities
