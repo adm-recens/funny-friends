@@ -14,13 +14,13 @@
     "build": "turbo run build",
     "build:platform": "turbo run build --filter=@funny-friends/platform",
     "build:games": "turbo run build --filter='@funny-friends/*' --filter=!@funny-friends/platform",
-    "start": "turbo run start --filter=@funny-friends/platform",
+    "start": "cd packages/platform/server && npm start",
     "lint": "turbo run lint",
     "db:push": "turbo run db:push --filter=@funny-friends/platform-server",
     "db:generate": "turbo run db:generate --filter=@funny-friends/platform-server",
     "db:studio": "turbo run db:studio --filter=@funny-friends/platform-server",
     "clean": "turbo run clean && rm -rf node_modules",
-    "render-build": "npm install && turbo run render-build"
+    "render-build": "npm install && cd packages/platform/client && npm run build && cd ../server && npx prisma generate"
   },
   "engines": {
     "node": ">=18.0.0"

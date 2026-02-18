@@ -2,7 +2,21 @@
 
 ## Overview
 
-This repository uses a hierarchical branch structure to manage the platform and games separately.
+This repository uses a **Monorepo with Workspaces** structure to manage the platform and games separately. We use npm workspaces and Turborepo for build orchestration.
+
+## Monorepo Structure
+
+```
+funny-friends/
+├── package.json          # Root workspace configuration
+├── turbo.json            # Turborepo build pipeline
+├── packages/
+│   ├── shared/           # Shared utilities, types, config
+│   ├── platform/         # Core platform (auth, admin, API)
+│   ├── teen-patti/       # Teen Patti game
+│   └── rummy/            # Rummy game
+└── BRANCH_STRUCTURE.md   # This file
+```
 
 ## Branch Hierarchy
 
@@ -103,17 +117,41 @@ games/<game> → games-base → main (if shared)
 
 ## Package Structure
 
+### Workspace Packages
+
 ```
 packages/
-├── platform/
-│   ├── client/     # React app (auth, admin, dashboard)
-│   └── server/     # API, database, auth
-├── teen-patti/
-│   ├── client/     # Game UI components
-│   └── server/     # Game logic, state management
-└── rummy/
-    ├── client/     # Game UI components
-    └── server/     # Game logic, state management
+├── shared/               # Shared utilities and configurations
+│   ├── src/
+│   │   ├── config.js     # API_URL, SOCKET_CONFIG
+│   │   ├── types/        # Type definitions
+│   │   └── utils/        # Helper functions
+│   └── package.json      # @funny-friends/shared
+│
+├── platform/             # Core platform
+│   ├── client/           # React app (@funny-friends/platform-client)
+│   │   ├── src/
+│   │   │   ├── pages/    # Welcome, Login, Admin, etc.
+│   │   │   ├── context/  # AuthContext, ToastContext
+│   │   │   └── components/
+│   │   └── package.json
+│   └── server/           # API server (@funny-friends/platform-server)
+│       ├── controllers/
+│       ├── prisma/       # Database schema
+│       ├── server.js
+│       └── package.json
+│
+├── teen-patti/           # Teen Patti game
+│   ├── client/           # Game UI (@funny-friends/teen-patti-client)
+│   │   └── pages/
+│   └── server/           # Game logic (@funny-friends/teen-patti-server)
+│       └── GameManager.js
+│
+└── rummy/                # Rummy game
+    ├── client/           # Game UI (@funny-friends/rummy-client)
+    │   └── pages/
+    └── server/           # Game logic (@funny-friends/rummy-server)
+        └── GameManager.js
 ```
 
 ## Best Practices
@@ -124,7 +162,59 @@ packages/
 4. **Sync regularly** - merge `games-base` into game branches frequently
 5. **Use feature branches** within each game branch for specific features
 
-## Commands Quick Reference
+## Monorepo Commands
+
+### Installing Dependencies
+
+```bash
+# Install all dependencies for all packages
+npm install
+
+# Install dependency in specific package
+npm install <package> --workspace=@funny-friends/platform-client
+```
+
+### Development
+
+```bash
+# Start all packages in development mode
+npm run dev
+
+# Start only platform
+npm run dev:platform
+
+# Start specific game
+npm run dev:teen-patti
+npm run dev:rummy
+```
+
+### Building
+
+```bash
+# Build all packages
+npm run build
+
+# Build only platform
+npm run build:platform
+
+# Build all games
+npm run build:games
+```
+
+### Database
+
+```bash
+# Push schema changes
+npm run db:push
+
+# Open Prisma Studio
+npm run db:studio
+
+# Generate Prisma client
+npm run db:generate
+```
+
+## Git Branch Commands
 
 ```bash
 # Switch to platform branch
@@ -147,9 +237,43 @@ git commit -m "<New Game> branch: initial setup"
 
 ## Important Notes
 
-- Game branches (`games/*`) contain only their specific game + platform
-- `games-base` is the integration point - always test here before production
-- Platform changes should flow down: `platform` → `games-base` → `games/*`
-- Game changes should flow up: `games/<game>` → `games-base` → `main`
+### Branch Content
+
+- **Game branches (`games/*`)**: Contain only their specific game + platform + shared
+- **games-base**: Integration point with ALL games - always test here before production
+- **platform**: Contains ONLY platform and shared packages (no games)
+- **main**: Production branch with complete integration
+
+### Code Flow
+
+```
+Platform changes: platform → games-base → games/* → main
+Game changes:     games/<game> → games-base → main
+```
+
+### Monorepo Best Practices
+
+1. **Use workspace dependencies**: Reference other packages using their workspace name:
+   ```json
+   "dependencies": {
+     "@funny-friends/shared": "^1.0.0"
+   }
+   ```
+
+2. **Keep packages independent**: Each package should be able to build independently
+
+3. **Shared code goes in `packages/shared/`**: Don't duplicate utilities across packages
+
+4. **Import from shared**:
+   ```javascript
+   import { API_URL, SOCKET_CONFIG } from '@funny-friends/shared';
+   ```
+
+5. **Platform server has temporary GameManager**: The platform server currently includes GameManager for backward compatibility. Future refactoring will move this to a proper plugin system.
+
+### What NOT to do
+
 - Never commit game-specific code to `platform` branch
 - Never push platform-only changes directly to `games/*` branches
+- Don't modify `package-lock.json` files manually
+- Don't commit `node_modules` or build artifacts
