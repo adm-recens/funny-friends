@@ -60,7 +60,7 @@ const OperatorGames = () => {
                     ? 'border-slate-200 hover:shadow-lg cursor-pointer' 
                     : 'border-slate-100 opacity-60'
                 }`}
-                onClick={() => hasAccess && navigate(`/setup?game=${game.code}`)}
+                onClick={() => hasAccess && navigate(`/sessions/new?game=${game.code}`)}
               >
                 <div className="p-6">
                   {/* Game Header */}

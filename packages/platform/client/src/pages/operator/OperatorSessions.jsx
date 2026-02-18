@@ -72,7 +72,7 @@ const OperatorSessions = () => {
           <p className="text-slate-500">Manage your game sessions</p>
         </div>
         <button
-          onClick={() => navigate('/setup')}
+          onClick={() => navigate('/sessions/new')}
           className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
         >
           <Plus size={20} />
@@ -121,7 +121,7 @@ const OperatorSessions = () => {
               : 'Create your first session to get started'}
           </p>
           <button
-            onClick={() => navigate('/setup')}
+            onClick={() => navigate('/sessions/new')}
             className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
           >
             Create Session

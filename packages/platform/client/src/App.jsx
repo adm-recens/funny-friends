@@ -10,6 +10,7 @@ import Login from './pages/Login';
 import Logout from './pages/Logout';
 import Setup from './pages/Setup';
 import Profile from './pages/Profile';
+import SessionSetup from './pages/SessionSetup';
 
 // Admin Control Panel
 import AdminControlPanel from './pages/admin/AdminControlPanel';
@@ -132,6 +133,16 @@ const AppRoutes = () => {
 
       {/* Legacy Operator Dashboard - Redirect to new control panel */}
       <Route path="/operator-dashboard" element={<Navigate to="/operator/dashboard" replace />} />
+      
+      {/* Session Setup - Create new game session */}
+      <Route
+        path="/sessions/new"
+        element={
+          <ProtectedRoute requireOperator={true}>
+            <SessionSetup />
+          </ProtectedRoute>
+        }
+      />
       
       {/* Profile Route - Any logged in user */}
       <Route
