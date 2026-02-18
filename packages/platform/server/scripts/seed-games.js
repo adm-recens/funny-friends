@@ -22,13 +22,13 @@ async function main() {
     {
       code: 'rummy',
       name: 'Rummy',
-      description: 'Form sets and sequences. Coming soon!',
+      description: 'Form sets and sequences with 13 cards!',
       icon: '♦',
       color: 'from-orange-500 to-red-500',
       maxPlayers: 6,
       minPlayers: 2,
-      status: 'coming-soon',
-      isActive: false
+      status: 'active',
+      isActive: true
     }
   ];
 
