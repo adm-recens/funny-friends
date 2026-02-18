@@ -1,17 +1,18 @@
 {
-  "name": "funny-friends-client",
-  "description": "Funny Friends - Play games with friends securely and for fun",
-  "private": true,
-  "version": "0.0.0",
+  "name": "@funny-friends/platform-client",
+  "description": "Funny Friends Platform - React Client Application",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "build:local": "vite build --mode local"
+    "build:local": "vite build --mode local",
+    "clean": "rm -rf node_modules dist"
   },
   "dependencies": {
+    "@funny-friends/shared": "^1.0.0",
     "@tailwindcss/postcss": "^4.1.17",
     "lucide-react": "^0.554.0",
     "react": "^19.2.0",

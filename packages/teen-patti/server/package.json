@@ -1,0 +1,21 @@
+{
+  "name": "@funny-friends/teen-patti-server",
+  "description": "Teen Patti Game - Server Logic",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "main": "GameManager.js",
+  "exports": {
+    ".": "./GameManager.js"
+  },
+  "scripts": {
+    "clean": "rm -rf node_modules"
+  },
+  "dependencies": {
+    "@funny-friends/shared": "^1.0.0",
+    "@funny-friends/platform-server": "^2.0.0"
+  },
+  "peerDependencies": {
+    "socket.io": "^4.8.0"
+  },
+  "license": "MIT"
+}
