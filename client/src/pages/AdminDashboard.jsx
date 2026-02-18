@@ -33,15 +33,25 @@ const AdminDashboard = () => {
         fetchData();
     }, [isAdmin]);
 
+    // Fetch games when create user modal opens (in case initial fetch failed)
+    useEffect(() => {
+        if (showCreateUserModal && availableGames.length === 0) {
+            fetchGameTypes();
+        }
+    }, [showCreateUserModal]);
+
     const fetchGameTypes = async () => {
         try {
             const res = await fetch(`${API_URL}/api/gametypes`, { credentials: 'include' });
             if (res.ok) {
                 const games = await res.json();
                 setAvailableGames(games.filter(g => g.isActive));
+                console.log('[Admin] Loaded', games.length, 'game types');
+            } else {
+                console.error('[Admin] Failed to fetch game types:', res.status);
             }
         } catch (e) {
-            console.error('Error fetching game types:', e);
+            console.error('[Admin] Error fetching game types:', e);
         }
     };
 
@@ -583,43 +593,85 @@ const AdminDashboard = () => {
                     {/* Users Section */}
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                         <div className="p-6 border-b border-slate-100">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                                    <Users size={20} className="text-purple-600" />
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+                                        <Users size={20} className="text-purple-600" />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-lg font-bold text-slate-900">User Management</h2>
+                                        <p className="text-sm text-slate-500">{adminUsers.length} total users</p>
+                                    </div>
                                 </div>
-                                <h2 className="text-lg font-bold text-slate-900">Registered Users</h2>
+                                <button
+                                    onClick={() => setShowCreateUserModal(true)}
+                                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 transition-colors"
+                                >
+                                    <UserPlus size={18} />
+                                    Add User
+                                </button>
                             </div>
                         </div>
 
                         <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
-                            {adminUsers.map(u => (
-                                <div key={u.id} className="p-4 hover:bg-slate-50 transition-colors">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 bg-slate-200 rounded-xl flex items-center justify-center font-bold text-slate-600">
-                                                {u.username[0].toUpperCase()}
-                                            </div>
-                                            <div>
-                                                <p className="font-bold text-slate-900">{u.username}</p>
-                                                <span className={`text-xs px-2 py-0.5 rounded font-medium ${u.role === 'ADMIN' ? 'bg-red-100 text-red-600' :
+                            {adminUsers.length === 0 ? (
+                                <div className="p-8 text-center text-slate-500">
+                                    <Users size={48} className="mx-auto mb-3 opacity-20" />
+                                    <p>No users found</p>
+                                    <p className="text-sm mt-1">Create your first user to get started</p>
+                                </div>
+                            ) : (
+                                adminUsers.map(u => (
+                                    <div key={u.id} className="p-4 hover:bg-slate-50 transition-colors">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${
+                                                    u.role === 'ADMIN' ? 'bg-red-100 text-red-600' :
                                                     u.role === 'OPERATOR' ? 'bg-blue-100 text-blue-600' :
-                                                        'bg-slate-100 text-slate-600'
-                                                    }`}>
-                                                    {u.role}
-                                                </span>
+                                                    'bg-slate-200 text-slate-600'
+                                                }`}>
+                                                    {u.username[0].toUpperCase()}
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="font-bold text-slate-900">{u.username}</p>
+                                                        {u.id === user.id && (
+                                                            <span className="text-xs px-2 py-0.5 bg-green-100 text-green-600 rounded font-medium">
+                                                                You
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <span className={`text-xs px-2 py-0.5 rounded font-medium ${
+                                                            u.role === 'ADMIN' ? 'bg-red-100 text-red-600' :
+                                                            u.role === 'OPERATOR' ? 'bg-blue-100 text-blue-600' :
+                                                            'bg-slate-100 text-slate-600'
+                                                        }`}>
+                                                            {u.role}
+                                                        </span>
+                                                        {u.createdAt && (
+                                                            <span className="text-xs text-slate-400">
+                                                                Created {new Date(u.createdAt).toLocaleDateString()}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                {u.id !== user.id && u.id !== 1 && (
+                                                    <button
+                                                        onClick={() => handleDeleteUser(u.id)}
+                                                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                                        title="Delete User"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
-                                        {u.id !== user.id && u.id !== 1 && (
-                                            <button
-                                                onClick={() => handleDeleteUser(u.id)}
-                                                className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                            >
-                                                <Trash2 size={16} />
-                                            </button>
-                                        )}
                                     </div>
-                                </div>
-                            ))}
+                                ))
+                            )}
                         </div>
                     </div>
                 </div>
@@ -705,27 +757,41 @@ const AdminDashboard = () => {
                             {/* Game Access Selection */}
                             {(newUser.role === 'OPERATOR' || newUser.role === 'ADMIN') && (
                                 <div>
-                                    <label className="block text-sm font-bold text-slate-700 mb-2">Allowed Games</label>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        {availableGames.map(game => (
-                                            <div
-                                                key={game.id}
-                                                onClick={() => toggleGameSelection(game.id)}
-                                                className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-2 ${newUser.allowedGames?.includes(game.id)
-                                                    ? 'border-blue-500 bg-blue-50'
-                                                    : 'border-slate-200 hover:border-slate-300'
-                                                    }`}
-                                            >
-                                                <div className={`w-5 h-5 rounded border flex items-center justify-center ${newUser.allowedGames?.includes(game.id)
-                                                    ? 'bg-blue-500 border-blue-500'
-                                                    : 'border-slate-300 bg-white'
-                                                    }`}>
-                                                    {newUser.allowedGames?.includes(game.id) && <CheckCircle size={14} className="text-white" />}
-                                                </div>
-                                                <span className="font-bold text-sm text-slate-700">{game.name}</span>
+                                    <label className="block text-sm font-bold text-slate-700 mb-2">
+                                        Allowed Games 
+                                        <span className="text-slate-400 font-normal text-xs ml-2">
+                                            ({availableGames.length} available)
+                                        </span>
+                                    </label>
+                                    {availableGames.length === 0 ? (
+                                        <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-sm">
+                                            <div className="flex items-center gap-2">
+                                                <AlertCircle size={16} />
+                                                <span>No games available. Please check game configuration.</span>
                                             </div>
-                                        ))}
-                                    </div>
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                                            {availableGames.map(game => (
+                                                <div
+                                                    key={game.id}
+                                                    onClick={() => toggleGameSelection(game.id)}
+                                                    className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-2 ${newUser.allowedGames?.includes(game.id)
+                                                        ? 'border-blue-500 bg-blue-50'
+                                                        : 'border-slate-200 hover:border-slate-300'
+                                                        }`}
+                                                >
+                                                    <div className={`w-5 h-5 rounded border flex items-center justify-center ${newUser.allowedGames?.includes(game.id)
+                                                        ? 'bg-blue-500 border-blue-500'
+                                                        : 'border-slate-300 bg-white'
+                                                        }`}>
+                                                        {newUser.allowedGames?.includes(game.id) && <CheckCircle size={14} className="text-white" />}
+                                                    </div>
+                                                    <span className="font-bold text-sm text-slate-700">{game.name}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             )}
 

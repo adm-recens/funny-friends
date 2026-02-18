@@ -850,6 +850,24 @@ app.post('/api/v2/auth/logout', asyncHandler(async (req, res) => {
   await authController.handleLogout(req, res);
 }));
 
+// GET /api/gametypes - Get all game types (for admin user management)
+app.get('/api/gametypes', requireAuth, asyncHandler(async (req, res) => {
+  const gameTypes = await prisma.gameType.findMany({
+    select: {
+      id: true,
+      code: true,
+      name: true,
+      description: true,
+      icon: true,
+      color: true,
+      maxPlayers: true,
+      minPlayers: true,
+      isActive: true
+    }
+  });
+  res.json(gameTypes);
+}));
+
 // GET /api/v2/games - Get available games for current user
 app.get('/api/v2/games', asyncHandler(async (req, res) => {
   const user = getUserFromRequest(req);
