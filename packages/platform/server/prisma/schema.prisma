@@ -7,133 +7,80 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ============================================================================
+// USER MANAGEMENT
+// ============================================================================
+
 model User {
-  id        Int      @id @default(autoincrement())
-  username  String   @unique
-  password  String   
-  role      String   @default("GUEST") // 'ADMIN', 'OPERATOR', 'PLAYER', 'GUEST'
-  failedLoginAttempts Int @default(0)
-  lockedUntil DateTime?
-  lastPasswordChange DateTime @default(now())
-  createdAt DateTime @default(now())
-  player    Player?
-  sessions  UserSession[]
-  allowedGames UserGamePermission[]
-}
-
-model GameType {
-  id          String   @id @default(uuid())
-  code        String   @unique // 'teen-patti', 'rummy', etc.
-  name        String
-  description String?
-  icon        String   // Emoji or icon name
-  color       String   // Tailwind gradient classes
-  maxPlayers  Int
-  minPlayers  Int
-  status      String   @default("active") // active, beta, coming-soon
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  sessions    GameSession[]
-  permissions UserGamePermission[]
-}
-
-model GameSession {
-  id          Int        @id @default(autoincrement())
-  name        String     @unique
-  gameTypeId  String
-  gameType    GameType   @relation(fields: [gameTypeId], references: [id])
-  createdBy   Int        // User ID who created this session
-  totalRounds Int
-  currentRound Int       @default(1)
-  isActive    Boolean    @default(true)
-  isPublic    Boolean    @default(false) // Can viewers join without invitation?
-  status      String     @default("waiting") // waiting, playing, paused, completed
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  hands       GameHand[]
-  players     Player[]
-  playerAddRequests PlayerAddRequest[]
+  id                  Int       @id @default(autoincrement())
+  username            String    @unique
+  password            String    // Hashed password
+  email               String?   @unique
+  role                UserRole  @default(PLAYER)
   
-  @@index([gameTypeId])
-  @@index([createdBy])
+  // Security
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+  lastPasswordChange  DateTime  @default(now())
+  passwordResetToken  String?
+  passwordResetExpires DateTime?
+  
+  // Status
+  isActive            Boolean   @default(true)
+  emailVerified       Boolean   @default(false)
+  
+  // Timestamps
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  
+  // Relations
+  profile             UserProfile?
+  sessions            UserSession[]
+  loginAttempts       LoginAttempt[]
+  gamePermissions     UserGamePermission[]
+  playerProfiles      PlayerProfile[]
+  createdSessions     GameSession[]  @relation("SessionCreator")
+  
+  @@index([username])
+  @@index([role])
   @@index([isActive])
-  @@index([status])
 }
 
-model UserGamePermission {
-  id          String   @id @default(uuid())
-  userId      Int
+model UserProfile {
+  id          Int      @id @default(autoincrement())
+  userId      Int      @unique
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  gameTypeId  String
-  gameType    GameType @relation(fields: [gameTypeId], references: [id], onDelete: Cascade)
-  canCreate   Boolean  @default(true)
-  canManage   Boolean  @default(true)
-  createdAt   DateTime @default(now())
   
-  @@unique([userId, gameTypeId])
+  // Personal Info
+  displayName String?
+  phoneNumber String?
+  avatarUrl   String?
+  
+  // Preferences
+  timezone    String   @default("UTC")
+  language    String   @default("en")
+  theme       String   @default("dark")
+  
+  // Stats
+  totalGamesPlayed    Int      @default(0)
+  totalSessionsHosted Int      @default(0)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
   @@index([userId])
-  @@index([gameTypeId])
-}
-
-model GameHand {
-  id        Int      @id @default(autoincrement())
-  winner    String
-  potSize   Int
-  logs      Json     // PostgreSQL supports JSON natively
-  createdAt DateTime @default(now())
-  
-  sessionId Int?
-  session   GameSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-}
-
-model Player {
-  id             Int     @id @default(autoincrement())
-  name           String
-  sessionBalance Int     @default(0)
-  seatPosition   Int?    // 1-based index for seating
-  
-  userId         Int?    @unique
-  user           User?   @relation(fields: [userId], references: [id])
-  
-  sessionId      Int?
-  session        GameSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  
-  @@unique([name, sessionId])  // Player names must be unique within a session
-}
-
-model PlayerAddRequest {
-  id          Int      @id @default(autoincrement())
-  sessionId   Int
-  session     GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  playerName  String
-  status      String   @default("PENDING") // PENDING, APPROVED, DECLINED
-  requestedBy String   // Role of requester (OPERATOR or ADMIN)
-  requestedAt DateTime @default(now())
-  resolvedAt  DateTime?
-  resolvedBy  String?  // Admin who resolved it
-}
-
-model LoginAttempt {
-  id          Int      @id @default(autoincrement())
-  username    String   // Attempted username
-  ipAddress   String   // Client IP
-  userAgent   String?  // Client user agent
-  success     Boolean  // Whether login succeeded
-  reason      String?  // Failure reason (if failed)
-  createdAt   DateTime @default(now())
-  
-  @@index([username, createdAt])
-  @@index([ipAddress, createdAt])
 }
 
 model UserSession {
   id          String   @id @default(uuid())
   userId      Int
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  token       String   @unique // JWT token identifier
+  
+  token       String   @unique
   ipAddress   String
   userAgent   String?
-  deviceInfo  String?  // Device fingerprint
+  deviceInfo  String?
+  
   isValid     Boolean  @default(true)
   createdAt   DateTime @default(now())
   lastUsedAt  DateTime @default(now())
@@ -142,4 +89,321 @@ model UserSession {
   @@index([userId])
   @@index([token])
   @@index([isValid])
+}
+
+model LoginAttempt {
+  id          Int      @id @default(autoincrement())
+  userId      Int?
+  user        User?    @relation(fields: [userId], references: [id])
+  
+  username    String   // Attempted username
+  ipAddress   String
+  userAgent   String?
+  success     Boolean
+  reason      String?  // Failure reason
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([username, createdAt])
+  @@index([ipAddress, createdAt])
+  @@index([userId])
+}
+
+enum UserRole {
+  ADMIN
+  OPERATOR
+  PLAYER
+  GUEST
+}
+
+// ============================================================================
+// GAME PLUGIN REGISTRY
+// ============================================================================
+
+model GameType {
+  id          String   @id @default(uuid())
+  code        String   @unique  // 'teen-patti', 'rummy', etc.
+  name        String
+  description String?
+  version     String   @default("1.0.0")
+  
+  // Plugin Configuration
+  pluginPath  String            // Path to plugin file (e.g., 'teen-patti/server/GamePlugin.js')
+  configSchema Json?            // JSON Schema for game configuration
+  defaultConfig Json            // Default configuration values
+  
+  // Capabilities
+  minPlayers  Int
+  maxPlayers  Int
+  supportsRounds Boolean       @default(true)
+  
+  // Status
+  status      GameStatus       @default(ACTIVE)
+  isActive    Boolean          @default(true)
+  
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  
+  // Relations
+  sessions    GameSession[]
+  permissions UserGamePermission[]
+  
+  @@index([code])
+  @@index([status])
+  @@index([isActive])
+}
+
+model UserGamePermission {
+  id          String   @id @default(uuid())
+  
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  gameTypeId  String
+  gameType    GameType @relation(fields: [gameTypeId], references: [id], onDelete: Cascade)
+  
+  // Permissions
+  canCreate   Boolean  @default(true)
+  canManage   Boolean  @default(true)
+  canView     Boolean  @default(true)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([userId, gameTypeId])
+  @@index([userId])
+  @@index([gameTypeId])
+}
+
+enum GameStatus {
+  ACTIVE
+  BETA
+  COMING_SOON
+  DEPRECATED
+}
+
+// ============================================================================
+// GAME SESSIONS (Plugin-Agnostic)
+// ============================================================================
+
+model GameSession {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  
+  gameTypeId  String
+  gameType    GameType @relation(fields: [gameTypeId], references: [id])
+  
+  createdBy   Int
+  creator     User     @relation("SessionCreator", fields: [createdBy], references: [id])
+  
+  // Configuration (game-specific settings stored as JSON)
+  config      Json     @default("{}")
+  
+  // Session State
+  status      SessionStatus    @default(WAITING)
+  currentRound Int             @default(0)
+  totalRounds  Int             @default(10)
+  
+  // Visibility
+  isPublic    Boolean          @default(false)
+  inviteCode  String?          @unique
+  
+  // Timestamps
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  endedAt     DateTime?
+  
+  // Relations
+  state       GameState?
+  players     PlayerProfile[]
+  rounds      GameRound[]
+  events      GameEvent[]
+  viewerRequests ViewerRequest[]
+  
+  @@index([gameTypeId])
+  @@index([createdBy])
+  @@index([status])
+  @@index([isPublic])
+}
+
+model GameState {
+  id          String   @id @default(uuid())
+  sessionId   String   @unique
+  session     GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  // Serialized game state from plugin
+  data        Json     // Complete game state for persistence/resumption
+  
+  // Metadata
+  version     Int      @default(1)  // For optimistic locking
+  lastActionAt DateTime @default(now())
+  
+  updatedAt   DateTime @updatedAt
+  
+  @@index([sessionId])
+}
+
+model PlayerProfile {
+  id          String   @id @default(uuid())
+  
+  sessionId   String
+  session     GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  userId      Int?     // Optional - can have guest players
+  user        User?    @relation(fields: [userId], references: [id])
+  
+  // Player Info
+  name        String
+  displayName String?
+  
+  // Session-specific data
+  seatPosition Int?
+  startingBalance Int @default(0)
+  currentBalance  Int @default(0)
+  
+  // Status
+  status      PlayerStatus @default(ACTIVE)
+  joinedAt    DateTime @default(now)
+  leftAt      DateTime?
+  
+  // Stats
+  totalRoundsPlayed Int @default(0)
+  totalWinnings     Int @default(0)
+  totalLosses       Int @default(0)
+  
+  @@unique([sessionId, name])
+  @@index([sessionId])
+  @@index([userId])
+  @@index([status])
+}
+
+model GameRound {
+  id          String   @id @default(uuid())
+  
+  sessionId   String
+  session     GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  roundNumber Int
+  
+  // Round data (game-specific, stored as JSON)
+  data        Json     // Winner, scores, hands, etc.
+  
+  // Generic metrics
+  startedAt   DateTime @default(now())
+  endedAt     DateTime?
+  durationMs  Int?     // Round duration in milliseconds
+  
+  // Relations
+  events      GameEvent[]
+  transactions Transaction[]
+  
+  @@unique([sessionId, roundNumber])
+  @@index([sessionId])
+}
+
+model GameEvent {
+  id          String   @id @default(uuid())
+  
+  sessionId   String
+  session     GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  roundId     String?
+  round       GameRound?  @relation(fields: [roundId], references: [id])
+  
+  playerId    String?     // PlayerProfile ID
+  
+  // Event Data
+  type        String      // 'ACTION', 'STATE_CHANGE', 'PLAYER_JOIN', etc.
+  action      String?     // Game-specific action type
+  payload     Json        // Action data (bet amount, cards played, etc.)
+  
+  // Audit
+  timestamp   DateTime    @default(now())
+  
+  @@index([sessionId])
+  @@index([roundId])
+  @@index([type])
+  @@index([timestamp])
+}
+
+// ============================================================================
+// LEDGER & TRANSACTIONS
+// ============================================================================
+
+model Transaction {
+  id          String   @id @default(uuid())
+  
+  roundId     String
+  round       GameRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  
+  playerId    String   // PlayerProfile ID
+  
+  // Transaction Details
+  type        TransactionType
+  amount      Int      // Positive for credit, negative for debit
+  
+  // Context
+  description String?
+  metadata    Json?    // Game-specific context
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([roundId])
+  @@index([playerId])
+  @@index([type])
+}
+
+enum TransactionType {
+  BUY_IN          // Initial chips/money
+  WIN             // Won a round
+  LOSS            // Lost a round
+  BET             // Placed a bet
+  PENALTY         // Penalty/fine
+  BONUS           // Bonus/extra chips
+  SETTLEMENT      // Final settlement
+}
+
+// ============================================================================
+// SESSION MANAGEMENT
+// ============================================================================
+
+model ViewerRequest {
+  id          String   @id @default(uuid())
+  
+  sessionId   String
+  session     GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  viewerName  String
+  socketId    String   // Socket connection ID
+  
+  status      RequestStatus @default(PENDING)
+  
+  requestedAt DateTime @default(now())
+  resolvedAt  DateTime?
+  resolvedBy  String?  // Admin/Operator who resolved
+  
+  @@index([sessionId])
+  @@index([status])
+}
+
+enum SessionStatus {
+  WAITING     // Waiting for players
+  READY       // Ready to start
+  ACTIVE      // Game in progress
+  PAUSED      // Temporarily paused
+  COMPLETED   // Finished normally
+  CANCELLED   // Cancelled by operator
+}
+
+enum PlayerStatus {
+  ACTIVE      // Currently playing
+  INACTIVE    // Temporarily away
+  ELIMINATED  // Out of the game
+  LEFT        // Left the session
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
