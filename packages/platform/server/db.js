@@ -1,21 +1,16 @@
 // Database Connection Module
-// Centralizes Prisma Client instantiation with PostgreSQL adapter
+// Centralizes Prisma Client instantiation
 require('dotenv').config();
 const { PrismaClient } = require('@prisma/client');
-const { PrismaPg } = require('@prisma/adapter-pg');
-const { Pool } = require('pg');
 
 let prisma;
 
 if (!prisma) {
-    const connectionString = process.env.DATABASE_URL;
-    const pool = new Pool({
-        connectionString,
-        // Use SSL in production (Render)
-        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+    prisma = new PrismaClient({
+        // Prisma 5.x handles connection pooling and SSL automatically via DATABASE_URL
+        // For production (Render), ensure DATABASE_URL includes ?sslmode=require
+        log: process.env.NODE_ENV === 'development' ? ['query', 'info', 'warn', 'error'] : ['error']
     });
-    const adapter = new PrismaPg(pool);
-    prisma = new PrismaClient({ adapter });
 }
 
 module.exports = prisma;

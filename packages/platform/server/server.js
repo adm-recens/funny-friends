@@ -8,9 +8,6 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { z } = require('zod');
-const { PrismaClient } = require('@prisma/client');
-const { PrismaPg } = require('@prisma/adapter-pg');
-const { Pool } = require('pg');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const cookieParser = require('cookie-parser');
@@ -46,7 +43,7 @@ const server = http.createServer(app);
 // Trust proxy for rate limiting (required when behind Render's load balancer)
 app.set('trust proxy', 1);
 
-// Setup Prisma with PostgreSQL adapter for v7 (Centralized in db.js)
+// Setup Prisma Client (Centralized in db.js)
 const prisma = require('./db');
 
 // Export prisma for use in controllers
