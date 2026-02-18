@@ -14,8 +14,15 @@
  * - This class validates that recorded hands are valid Teen Patti hands
  * - It calculates pot distribution and maintains the ledger
  * 
+ * Player Count:
+ * - MINIMUM: 2 players required
+ * - MAXIMUM: No hardcoded limit - admin configures per session
+ * - Real-world consideration: A 52-card deck can theoretically support
+ *   many players (3 cards each), but this is a LEDGER app - you record
+ *   physical games, so the actual player count depends on what's physically happening
+ * 
  * Game Flow:
- * 1. Operator creates a session and adds players
+ * 1. Operator creates a session and adds players (admin decides player count)
  * 2. Physical game: Cards are dealt (this app tracks hands for recording)
  * 3. Physical game: Players bet, call, raise, fold with real cards
  * 4. Operator records: who bet what, who folded, who showed

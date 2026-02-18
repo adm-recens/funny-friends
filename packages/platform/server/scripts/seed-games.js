@@ -25,7 +25,7 @@ async function main() {
       description: 'Form sets and sequences with 13 cards!',
       icon: '♦',
       color: 'from-orange-500 to-red-500',
-      maxPlayers: 6,
+      maxPlayers: 20, // Flexible - admin can configure per session
       minPlayers: 2,
       status: 'active',
       isActive: true
