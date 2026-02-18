@@ -8,18 +8,16 @@
   ],
   "scripts": {
     "dev": "npm run db:generate && turbo run dev",
-    "dev:platform": "turbo run dev --filter=@funny-friends/platform-client --filter=@funny-friends/platform-server",
-    "build": "npm run db:generate && turbo run build",
-    "build:platform": "npm run db:generate && npm run build:client",
+    "build": "npm run db:generate && npm run build:client",
     "build:client": "cd packages/platform/client && npm run build",
-    "start": "cd packages/platform/server && npm start",
+    "start": "cd packages/platform/server && node server.js",
+    "postinstall": "npm run db:generate && npm run db:push && npm run db:seed",
     "lint": "turbo run lint",
     "db:push": "cd packages/platform/server && npx prisma db push",
     "db:generate": "cd packages/platform/server && npx prisma generate",
     "db:seed": "cd packages/platform/server && node scripts/seed-games.js",
     "db:studio": "cd packages/platform/server && npx prisma studio",
-    "clean": "rm -rf node_modules",
-    "render-build": "npm install && npm run db:generate && npm run build:client && npm run db:seed"
+    "clean": "rm -rf node_modules"
   },
   "engines": {
     "node": ">=18.0.0"
