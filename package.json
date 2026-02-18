@@ -34,5 +34,9 @@
   "license": "MIT",
   "devDependencies": {
     "turbo": "^2.0.0"
+  },
+  "resolutions": {
+    "@prisma/client": "5.22.0",
+    "prisma": "5.22.0"
   }
 }
