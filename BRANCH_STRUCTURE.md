@@ -259,6 +259,74 @@ See `MIGRATION_GUIDE.md` for:
 - Updating existing games to Plugin interface
 - Rollback procedures
 
+---
+
+## Control Panels
+
+The platform provides dedicated control panels for Administrators and Operators.
+
+### Admin Control Panel (`/admin`)
+
+**Full platform management interface for administrators.**
+
+**Routes:**
+- `/admin/dashboard` - Overview with system stats and quick actions
+- `/admin/users` - User management (CRUD operations)
+- `/admin/permissions` - Game permissions matrix
+- `/admin/games` - Game session management
+- `/admin/settings` - Platform configuration
+- `/admin/monitoring` - System health and logs
+
+**Features:**
+- User creation, editing, and deletion
+- Role assignment (ADMIN, OPERATOR, PLAYER, GUEST)
+- Game permission management per user
+- Enable/disable games
+- Platform-wide settings (security, notifications, data)
+- Danger zone for destructive actions
+- Real-time search and filtering
+- Responsive sidebar navigation
+
+**Access:** ADMIN role only
+
+### Operator Control Panel (`/operator`)
+
+**Session management interface for operators.**
+
+**Routes:**
+- `/operator/dashboard` - Overview with session stats
+- `/operator/sessions` - Session management
+- `/operator/games` - Available games list
+- `/operator/profile` - Account settings
+
+**Features:**
+- Create and manage game sessions
+- View active and ended sessions
+- Quick start guide for new operators
+- Profile management
+- Password change functionality
+- Mobile-friendly design
+
+**Access:** OPERATOR and ADMIN roles
+
+### Navigation Structure
+
+```
+Admin Panel (/admin)
+├── Dashboard          → Overview & Analytics
+├── User Management    → Create/Edit/Delete Users
+├── Permissions        → Game Access Control
+├── Games & Sessions   → Session Monitoring
+├── Platform Settings  → Configuration
+└── Monitoring         → System Health
+
+Operator Panel (/operator)
+├── Dashboard          → Session Overview
+├── My Sessions        → Session Management
+├── Available Games    → Games List
+└── My Profile         → Account Settings
+```
+
 ## Workflow
 
 ### Adding a New Game
