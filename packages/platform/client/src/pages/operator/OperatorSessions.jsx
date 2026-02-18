@@ -59,8 +59,8 @@ const OperatorSessions = () => {
 
   const getStatusBadge = (isActive) => {
     return isActive 
-      ? { color: 'bg-green-100 text-green-700', icon: CheckCircle, text: 'Active' }
-      : { color: 'bg-slate-100 text-slate-700', icon: XCircle, text: 'Ended' };
+      ? { color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', icon: CheckCircle, text: 'Active' }
+      : { color: 'bg-slate-700 text-slate-400 border-slate-600', icon: XCircle, text: 'Ended' };
   };
 
   return (
@@ -68,12 +68,12 @@ const OperatorSessions = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">My Sessions</h2>
-          <p className="text-slate-500">Manage your game sessions</p>
+          <h2 className="text-2xl font-bold text-slate-50">My Sessions</h2>
+          <p className="text-slate-400">Manage your game sessions</p>
         </div>
         <button
           onClick={() => navigate('/sessions/new')}
-          className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg font-medium transition-colors"
         >
           <Plus size={20} />
           Create Session
@@ -81,7 +81,7 @@ const OperatorSessions = () => {
       </div>
 
       {/* Filters */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col md:flex-row gap-4">
+      <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col md:flex-row gap-4">
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
           <input
@@ -89,7 +89,7 @@ const OperatorSessions = () => {
             placeholder="Search sessions..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+            className="w-full pl-10 pr-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-50 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
           />
         </div>
         <div className="flex items-center gap-2">
@@ -97,7 +97,7 @@ const OperatorSessions = () => {
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+            className="px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-50 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
           >
             <option value="ALL">All Sessions</option>
             <option value="ACTIVE">Active</option>
@@ -109,20 +109,20 @@ const OperatorSessions = () => {
       {/* Sessions Grid */}
       {loading ? (
         <div className="flex items-center justify-center h-64">
-          <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-12 h-12 border-4 border-violet-500 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : filteredSessions.length === 0 ? (
-        <div className="bg-white rounded-xl p-12 text-center border border-slate-200">
-          <Gamepad2 size={48} className="mx-auto text-slate-300 mb-4" />
-          <h3 className="text-lg font-semibold text-slate-900 mb-2">No Sessions Found</h3>
-          <p className="text-slate-500 mb-4">
+        <div className="bg-slate-800 rounded-xl p-12 text-center border border-slate-700">
+          <Gamepad2 size={48} className="mx-auto text-slate-600 mb-4" />
+          <h3 className="text-lg font-semibold text-slate-50 mb-2">No Sessions Found</h3>
+          <p className="text-slate-400 mb-4">
             {searchQuery || filterStatus !== 'ALL' 
               ? 'Try adjusting your filters'
               : 'Create your first session to get started'}
           </p>
           <button
             onClick={() => navigate('/sessions/new')}
-            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+            className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors"
           >
             Create Session
           </button>
@@ -134,20 +134,20 @@ const OperatorSessions = () => {
             return (
               <div 
                 key={session.id}
-                className="bg-white rounded-xl border border-slate-200 overflow-hidden hover:shadow-md transition-shadow"
+                className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden hover:border-slate-600 hover:shadow-lg transition-all"
               >
                 <div className="p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
+                      <div className="w-12 h-12 bg-gradient-to-br from-violet-500 to-violet-700 rounded-xl flex items-center justify-center">
                         <Gamepad2 size={24} className="text-white" />
                       </div>
                       <div>
-                        <h3 className="font-bold text-slate-900">{session.name}</h3>
-                        <p className="text-sm text-slate-500">{session.gameType?.name}</p>
+                        <h3 className="font-bold text-slate-50">{session.name}</h3>
+                        <p className="text-sm text-slate-400">{session.gameType?.name}</p>
                       </div>
                     </div>
-                    <span className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${status.color}`}>
+                    <span className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border ${status.color}`}>
                       <status.icon size={12} />
                       {status.text}
                     </span>
@@ -155,21 +155,21 @@ const OperatorSessions = () => {
 
                   <div className="space-y-3 mb-4">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-500">Round</span>
-                      <span className="font-medium text-slate-900">
+                      <span className="text-slate-400">Round</span>
+                      <span className="font-medium text-slate-200">
                         {session.currentRound} / {session.totalRounds}
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-500">Players</span>
-                      <span className="font-medium text-slate-900 flex items-center gap-1">
+                      <span className="text-slate-400">Players</span>
+                      <span className="font-medium text-slate-200 flex items-center gap-1">
                         <Users size={14} />
                         {session.playerCount || 0}
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-500">Created</span>
-                      <span className="text-slate-900 flex items-center gap-1">
+                      <span className="text-slate-400">Created</span>
+                      <span className="text-slate-200 flex items-center gap-1">
                         <Clock size={14} />
                         {new Date(session.createdAt).toLocaleDateString()}
                       </span>
@@ -181,14 +181,14 @@ const OperatorSessions = () => {
                       <>
                         <button
                           onClick={() => navigate(`/game/${session.name}`)}
-                          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors"
                         >
                           <Play size={16} />
                           Join
                         </button>
                         <button
                           onClick={() => handleEndSession(session.name)}
-                          className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors"
+                          className="px-4 py-2 bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/20 transition-colors"
                         >
                           <Trash2 size={16} />
                         </button>
@@ -196,7 +196,7 @@ const OperatorSessions = () => {
                     ) : (
                       <button
                         onClick={() => navigate(`/game/${session.name}`)}
-                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-slate-700 text-slate-200 rounded-lg hover:bg-slate-600 transition-colors"
                       >
                         <Eye size={16} />
                         View Details
