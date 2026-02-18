@@ -16,7 +16,14 @@ const bcrypt = require('bcryptjs');
 const cookieParser = require('cookie-parser');
 const morgan = require('morgan');
 const TeenPattiGameManager = require('./game/GameManager');
-const RummyGameManager = require('../../rummy/server/GameManager');
+
+// Try to load RummyGameManager, fallback to null if not available
+let RummyGameManager = null;
+try {
+  RummyGameManager = require('../../rummy/server/GameManager');
+} catch (e) {
+  console.log('[INFO] Rummy game not available:', e.message);
+}
 const {
   SECURITY_CONFIG,
   validatePasswordStrength,
@@ -1864,7 +1871,7 @@ io.on('connection', (socket) => {
               });
               
               let newManager;
-              if (gameType?.code === 'rummy') {
+              if (gameType?.code === 'rummy' && RummyGameManager) {
                 newManager = new RummyGameManager(dbSession.id, sessionName, dbSession.totalRounds);
               } else {
                 // Default to Teen Patti
