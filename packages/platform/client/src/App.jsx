@@ -11,6 +11,7 @@ import Logout from './pages/Logout';
 import Setup from './pages/Setup';
 import Profile from './pages/Profile';
 import SessionSetup from './pages/SessionSetup';
+import Help from './pages/Help';
 
 // Admin Control Panel
 import AdminControlPanel from './pages/admin/AdminControlPanel';
@@ -93,6 +94,7 @@ const AppRoutes = () => {
         </SetupCheck>
       } />
       <Route path="/logout" element={<Logout />} />
+      <Route path="/help" element={<Help />} />
       
       {/* Admin Control Panel Routes */}
       <Route
