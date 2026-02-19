@@ -2331,48 +2331,20 @@ io.on('connection', (socket) => {
           socket.emit('error_message', result.error);
         }
       }
-    } else if (action.type === 'DROP_PLAYER') {
-      // Rummy: Drop player with penalty
-      if (manager.handleAction) {
-        const result = manager.handleAction({
-          type: 'DROP_PLAYER',
-          playerId: action.playerId,
-          phase: action.phase || 'initial'
-        });
-        if (!result.success) socket.emit('error_message', result.error);
-      }
-    } else if (action.type === 'SHOW_CLOSED_JOKER') {
-      // Rummy: Show closed joker (needs pure sequence)
-      if (manager.handleAction) {
-        const result = manager.handleAction({
-          type: 'SHOW_CLOSED_JOKER',
-          playerId: action.playerId
-        });
-        if (!result.success) socket.emit('error_message', result.error);
-        // Send player their updated hand info
-        const handData = manager.getPlayerHand(action.playerId);
-        if (handData) socket.emit('player_hand', handData);
-      }
-    } else if (action.type === 'RESOLVE_DECLARE') {
-      // Rummy: Resolve rummy declaration
-      if (manager.handleAction) {
-        const result = manager.handleAction({
-          type: 'RESOLVE_DECLARE',
-          winnerId: action.winnerId,
-          isValid: action.isValid
-        });
-        if (!result.success) socket.emit('error_message', result.error);
-      }
-    } else if (action.type === 'DISCARD_CARD') {
-      // Old Rummy specific - deprecated
-      if (manager.discardCard) {
-        const result = manager.discardCard(socket.user.id, action.cardId);
-        if (!result.success) socket.emit('error_message', result.error);
-      }
     } else if (action.type === 'RECORD_POINTS') {
-      // Rummy Ledger: Record points for a player
+      // Rummy: Record points for a player
       if (manager.handleAction) {
         const result = manager.handleAction(action);
+        if (!result.success) socket.emit('error_message', result.error);
+      }
+    } else if (action.type === 'RECORD_DROP') {
+      // Rummy: Record drop (initial=20pts, middle=40pts)
+      if (manager.handleAction) {
+        const result = manager.handleAction({
+          type: 'RECORD_DROP',
+          playerId: action.playerId,
+          dropType: action.dropType || 'initial'
+        });
         if (!result.success) socket.emit('error_message', result.error);
       }
     } else if (action.type === 'RECORD_WINNER') {
