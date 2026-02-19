@@ -1352,21 +1352,26 @@ app.post('/api/admin/users', requireAdmin, async (req, res) => {
       });
     }
 
-    // A1 FIX: If creating an OPERATOR with allowedGames, create UserGamePermission records
-    if (role === 'OPERATOR' && allowedGames && allowedGames.length > 0) {
+    // A1 FIX: If creating an OPERATOR, automatically grant permissions for all active games
+    if (role === 'OPERATOR') {
       try {
-        await prisma.userGamePermission.createMany({
-          data: allowedGames.map(gameId => ({
-            userId: user.id,
-            gameTypeId: gameId, // gameId is a UUID string, not an integer
-            canCreate: true,
-            canManage: true
-          }))
+        const allGames = await prisma.gameType.findMany({
+          where: { isActive: true }
         });
-        console.log(`[DEBUG] Created ${allowedGames.length} game permissions for operator ${user.username}`);
+        
+        if (allGames.length > 0) {
+          await prisma.userGamePermission.createMany({
+            data: allGames.map(game => ({
+              userId: user.id,
+              gameTypeId: game.id,
+              canCreate: true,
+              canManage: true
+            }))
+          });
+          console.log(`[DEBUG] Auto-granted permissions for ${allGames.length} games to operator ${user.username}`);
+        }
       } catch (permError) {
         console.error('[ERROR] Failed to create game permissions:', permError);
-        // Don't fail the user creation if permissions fail, just log it
       }
     }
 
@@ -1374,6 +1379,50 @@ app.post('/api/admin/users', requireAdmin, async (req, res) => {
   } catch (e) {
     console.error(e);
     res.status(400).json({ error: "User likely exists or invalid data" });
+  }
+});
+
+// GET user's game permissions
+app.get('/api/admin/users/:id/permissions', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const permissions = await prisma.userGamePermission.findMany({
+      where: { userId: parseInt(id) }
+    });
+    res.json(permissions);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Failed to fetch permissions" });
+  }
+});
+
+// UPDATE user's game permissions
+app.put('/api/admin/users/:id/permissions', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { permissions } = req.body; // Array of { gameTypeId, canCreate, canManage }
+    
+    // Delete existing permissions
+    await prisma.userGamePermission.deleteMany({
+      where: { userId: parseInt(id) }
+    });
+    
+    // Create new permissions
+    if (permissions && permissions.length > 0) {
+      await prisma.userGamePermission.createMany({
+        data: permissions.map(p => ({
+          userId: parseInt(id),
+          gameTypeId: p.gameTypeId,
+          canCreate: p.canCreate || false,
+          canManage: p.canManage || false
+        }))
+      });
+    }
+    
+    res.json({ success: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Failed to update permissions" });
   }
 });
 
