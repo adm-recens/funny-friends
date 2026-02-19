@@ -19,10 +19,8 @@ const UserManagement = () => {
   // Form states
   const [formData, setFormData] = useState({
     username: '',
-    email: '',
     password: '',
     role: 'PLAYER',
-    isActive: true,
     allowedGames: []
   });
 

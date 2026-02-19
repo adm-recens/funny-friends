@@ -32,11 +32,11 @@ const AdminDashboardOverview = () => {
 
       setStats({
         totalUsers: users.length,
-        activeOperators: users.filter(u => u.role === 'OPERATOR' && u.isActive).length,
+        activeOperators: users.filter(u => u.role === 'OPERATOR').length,
         totalSessions: sessions.length,
         activeSessions: sessions.filter(s => s.isActive).length,
         totalGames: games.filter(g => g.isActive).length,
-        recentLogins: users.slice(0, 5) // Last 5 users as example
+        recentLogins: users.slice(0, 5)
       });
     } catch (error) {
       console.error('Failed to fetch dashboard stats:', error);
