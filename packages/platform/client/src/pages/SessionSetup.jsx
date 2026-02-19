@@ -288,14 +288,9 @@ const SessionSetup = () => {
                 <Users size={18} className="text-violet-400" />
                 Players
               </h2>
-              <button
-                type="button"
-                onClick={handleAddPlayer}
-                className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded-lg transition-colors text-xs sm:text-sm font-medium"
-              >
-                <Plus size={14} />
-                Add Player
-              </button>
+              <span className="text-xs sm:text-sm text-slate-400">
+                {players.length} {players.length === 1 ? 'player' : 'players'}
+              </span>
             </div>
 
             <div className="space-y-2 sm:space-y-3">
@@ -322,6 +317,16 @@ const SessionSetup = () => {
                 </div>
               ))}
             </div>
+
+            {/* Add Player Button - Moved to bottom */}
+            <button
+              type="button"
+              onClick={handleAddPlayer}
+              className="w-full mt-3 sm:mt-4 inline-flex items-center justify-center gap-2 px-4 py-2.5 sm:py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition-colors text-sm font-medium shadow-lg shadow-violet-600/20"
+            >
+              <Plus size={18} />
+              Add Player
+            </button>
 
             <p className="mt-3 sm:mt-4 text-xs sm:text-sm text-slate-400">
               {selectedGame ? (
