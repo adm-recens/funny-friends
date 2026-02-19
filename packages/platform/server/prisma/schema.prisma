@@ -43,7 +43,12 @@ model GameSession {
   gameTypeId  String
   gameType    GameType   @relation(fields: [gameTypeId], references: [id])
   createdBy   Int        // User ID who created this session
-  totalRounds Int
+  
+  // Game-specific configuration
+  totalRounds Int?       // For Teen Patti: number of rounds per session
+  targetScore Int?       // For Rummy: target points to win
+  gameLimitType String   @default("rounds") // "rounds" or "points"
+  
   currentRound Int       @default(1)
   isActive    Boolean    @default(true)
   isPublic    Boolean    @default(false) // Can viewers join without invitation?

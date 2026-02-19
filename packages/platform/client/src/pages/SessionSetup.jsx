@@ -19,6 +19,7 @@ const SessionSetup = () => {
   const [formData, setFormData] = useState({
     name: '',
     totalRounds: 10,
+    targetScore: 100,
     gameCode: searchParams.get('game') || ''
   });
   
@@ -104,14 +105,25 @@ const SessionSetup = () => {
     }
 
     try {
+      // Prepare game-specific configuration
+      const gameConfig = selectedGame.code === 'rummy' 
+        ? { 
+            targetScore: parseInt(formData.targetScore),
+            gameLimitType: 'points'
+          }
+        : { 
+            totalRounds: parseInt(formData.totalRounds),
+            gameLimitType: 'rounds'
+          };
+
       const res = await fetch(`${API_URL}/api/sessions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
           name: formData.name,
-          totalRounds: parseInt(formData.totalRounds),
           gameCode: selectedGame.code,
+          ...gameConfig,
           players: validPlayers.map((p, i) => ({
             name: p.name.trim(),
             seat: i + 1
@@ -122,6 +134,7 @@ const SessionSetup = () => {
       const data = await res.json();
 
       if (res.ok && data.success) {
+        // Redirect to operator sessions to see the created session
         navigate('/operator/sessions');
       } else {
         setError(data.error || data.message || 'Failed to create session');
@@ -224,17 +237,47 @@ const SessionSetup = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Total Rounds</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="50"
-                  value={formData.totalRounds}
-                  onChange={(e) => setFormData({...formData, totalRounds: e.target.value})}
-                  className="w-24 sm:w-32 px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-700 border border-slate-600 rounded-lg text-slate-50 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm sm:text-base"
-                />
-              </div>
+              {/* Game-specific Configuration */}
+              {selectedGame && (
+                <div>
+                  {selectedGame.code === 'teen-patti' ? (
+                    <>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">
+                        Number of Rounds
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="50"
+                        value={formData.totalRounds}
+                        onChange={(e) => setFormData({...formData, totalRounds: e.target.value})}
+                        className="w-24 sm:w-32 px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-700 border border-slate-600 rounded-lg text-slate-50 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm sm:text-base"
+                      />
+                      <p className="mt-1 text-xs text-slate-500">
+                        Game ends after this many rounds
+                      </p>
+                    </>
+                  ) : selectedGame.code === 'rummy' ? (
+                    <>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">
+                        Target Points
+                      </label>
+                      <input
+                        type="number"
+                        min="50"
+                        max="500"
+                        step="10"
+                        value={formData.targetScore}
+                        onChange={(e) => setFormData({...formData, targetScore: e.target.value})}
+                        className="w-24 sm:w-32 px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-700 border border-slate-600 rounded-lg text-slate-50 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm sm:text-base"
+                      />
+                      <p className="mt-1 text-xs text-slate-500">
+                        First player to reach this score wins
+                      </p>
+                    </>
+                  ) : null}
+                </div>
+              )}
             </div>
           </div>
 

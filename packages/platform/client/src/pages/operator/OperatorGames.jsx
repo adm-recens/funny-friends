@@ -16,12 +16,14 @@ const OperatorGames = () => {
 
   const fetchGames = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/gametypes`, {
+      // Use the v2 endpoint that returns only games user has permission for
+      const res = await fetch(`${API_URL}/api/v2/games`, {
         credentials: 'include'
       });
       if (res.ok) {
         const data = await res.json();
-        setGames(data.filter(g => g.isActive));
+        // The v2 endpoint already filters by permissions
+        setGames(data.games || []);
       }
     } catch (error) {
       console.error('Failed to fetch games:', error);
@@ -30,8 +32,11 @@ const OperatorGames = () => {
     }
   };
 
-  const canAccessGame = (gameId) => {
-    return user?.allowedGames?.includes(gameId) || user?.role === 'ADMIN';
+  const canAccessGame = (game) => {
+    // Admin always has access
+    if (user?.role === 'ADMIN') return true;
+    // For operators, check if they have canCreate permission for this game
+    return game.canCreate === true;
   };
 
   return (
@@ -50,7 +55,7 @@ const OperatorGames = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {games.map((game) => {
-            const hasAccess = canAccessGame(game.id);
+            const hasAccess = canAccessGame(game);
             
             return (
               <div 

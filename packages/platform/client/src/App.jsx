@@ -11,6 +11,7 @@ import Logout from './pages/Logout';
 import Setup from './pages/Setup';
 import Profile from './pages/Profile';
 import SessionSetup from './pages/SessionSetup';
+import GameSession from './pages/GameSession';
 import Help from './pages/Help';
 
 // Admin Control Panel
@@ -142,6 +143,16 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute requireOperator={true}>
             <SessionSetup />
+          </ProtectedRoute>
+        }
+      />
+      
+      {/* Game Session - Play/Manage a game */}
+      <Route
+        path="/game/:sessionName"
+        element={
+          <ProtectedRoute requireOperator={true}>
+            <GameSession />
           </ProtectedRoute>
         }
       />

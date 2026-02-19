@@ -882,11 +882,33 @@ app.get('/api/gametypes', requireAuth, asyncHandler(async (req, res) => {
 }));
 
 // GET /api/v2/games - Get available games for current user
-app.get('/api/v2/games', asyncHandler(async (req, res) => {
-  const user = getUserFromRequest(req);
+app.get('/api/v2/games', requireAuth, asyncHandler(async (req, res) => {
+  const user = req.user;
 
   let games;
-  if (user && (user.role === 'ADMIN' || user.role === 'OPERATOR')) {
+  if (user.role === 'ADMIN') {
+    // Admin can see all active games with full permissions
+    const allGames = await prisma.gameType.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        description: true,
+        icon: true,
+        color: true,
+        maxPlayers: true,
+        minPlayers: true,
+        status: true
+      }
+    });
+    
+    games = allGames.map(game => ({
+      ...game,
+      canCreate: true,
+      canManage: true
+    }));
+  } else if (user.role === 'OPERATOR') {
     // Get games user has permission to manage
     const userWithPermissions = await prisma.user.findUnique({
       where: { id: user.id },
@@ -1289,7 +1311,7 @@ app.post('/api/admin/users', requireAdmin, async (req, res) => {
         await prisma.userGamePermission.createMany({
           data: allowedGames.map(gameId => ({
             userId: user.id,
-            gameTypeId: parseInt(gameId),
+            gameTypeId: gameId, // gameId is a UUID string, not an integer
             canCreate: true,
             canManage: true
           }))
@@ -1680,11 +1702,20 @@ app.post('/api/admin/sessions/:name/approve-all-players', requireAdmin, async (r
 });
 
 app.post('/api/sessions', requireAuth, asyncHandler(async (req, res) => {
-  const { name, totalRounds, players, gameCode } = req.body; // players: [{ userId, seat, name }]
+  const { name, totalRounds, targetScore, gameLimitType, players, gameCode } = req.body; // players: [{ userId, seat, name }]
 
   // 1. Validate Input
-  if (!name || !totalRounds) {
-    return res.status(400).json({ error: "Session name and total rounds are required" });
+  if (!name) {
+    return res.status(400).json({ error: "Session name is required" });
+  }
+
+  // Validate game-specific configuration
+  const limitType = gameLimitType || 'rounds';
+  if (limitType === 'rounds' && !totalRounds) {
+    return res.status(400).json({ error: "Total rounds is required for this game type" });
+  }
+  if (limitType === 'points' && !targetScore) {
+    return res.status(400).json({ error: "Target score is required for this game type" });
   }
 
   // 2. Get Game Type
@@ -1725,17 +1756,26 @@ app.post('/api/sessions', requireAuth, asyncHandler(async (req, res) => {
     }
     // If active, return existing (rejoin) - logic continues below
   } else {
-    // Create new session with required fields
+    // Create new session with game-specific configuration
+    const sessionData = {
+      name,
+      isActive: true,
+      gameTypeId: gameType.id,
+      createdBy: req.user.id,
+      status: 'waiting',
+      isPublic: false,
+      gameLimitType: limitType
+    };
+
+    // Add game-specific configuration
+    if (limitType === 'points') {
+      sessionData.targetScore = parseInt(targetScore);
+    } else {
+      sessionData.totalRounds = parseInt(totalRounds);
+    }
+
     session = await prisma.gameSession.create({
-      data: {
-        name,
-        totalRounds,
-        isActive: true,
-        gameTypeId: gameType.id,
-        createdBy: req.user.id,
-        status: 'waiting',
-        isPublic: false
-      }
+      data: sessionData
     });
 
     // Create Initial Players if provided
@@ -1771,8 +1811,15 @@ app.post('/api/sessions', requireAuth, asyncHandler(async (req, res) => {
 
   res.json({ success: true, session });
   
-  // Note: GameManager is created lazily when first user joins via socket
-  // This prevents duplicate manager creation and ensures single source of truth
+  // Auto-initialize GameManager after session creation
+  // This ensures the game is ready immediately without waiting for operator to join via socket
+  try {
+    await initializeGameManager(session.name);
+    console.log(`[DEBUG] Auto-initialized GameManager for session: ${session.name}`);
+  } catch (error) {
+    console.error(`[ERROR] Failed to auto-initialize GameManager for ${session.name}:`, error);
+    // Don't fail the request - game can still be initialized lazily when operator joins
+  }
 }));
 
 // 5. REAL-TIME SOCKET
@@ -1782,6 +1829,146 @@ const activeSessions = new Map();
 const sessionLoaders = new Map(); // Track ongoing session loads to prevent race conditions
 const pendingViewerRequests = new Map(); // sessionName -> [{ socketId, name, timestamp }]
 const approvedViewers = new Map(); // sessionName -> Set of socket IDs
+
+// --- GAME MANAGER INITIALIZATION ---
+async function initializeGameManager(sessionName) {
+  // Check if already initialized
+  if (activeSessions.has(sessionName)) {
+    console.log(`[DEBUG] GameManager already exists for ${sessionName}`);
+    return activeSessions.get(sessionName);
+  }
+  
+  // Check if currently loading
+  if (sessionLoaders.has(sessionName)) {
+    console.log(`[DEBUG] GameManager ${sessionName} is loading, waiting...`);
+    return await sessionLoaders.get(sessionName);
+  }
+  
+  // Start loading process
+  const loadPromise = (async () => {
+    try {
+      console.log(`[DEBUG] Auto-initializing GameManager for ${sessionName}`);
+      const dbSession = await prisma.gameSession.findUnique({ where: { name: sessionName } });
+      
+      if (!dbSession || !dbSession.isActive) {
+        throw new Error(`Session ${sessionName} not found or inactive`);
+      }
+      
+      const dbPlayers = await prisma.player.findMany({ where: { sessionId: dbSession.id } });
+      const initialPlayers = dbPlayers.map(p => ({
+        id: p.id,
+        name: p.name,
+        sessionBalance: p.sessionBalance,
+        seat: p.seatPosition
+      }));
+      
+      // Get game type to determine which GameManager to use
+      const gameType = await prisma.gameType.findUnique({ 
+        where: { id: dbSession.gameTypeId },
+        select: { code: true }
+      });
+      
+      // Prepare game configuration
+      const gameConfig = {
+        sessionId: dbSession.id,
+        sessionName: sessionName,
+        gameLimitType: dbSession.gameLimitType || 'rounds',
+        totalRounds: dbSession.totalRounds,
+        targetScore: dbSession.targetScore
+      };
+      
+      let newManager;
+      if (gameType?.code === 'rummy' && RummyGameManager) {
+        newManager = new RummyGameManager(gameConfig);
+      } else {
+        // Default to Teen Patti (or stub GameManager)
+        newManager = TeenPattiGameManager ? new TeenPattiGameManager(gameConfig) : new (require('./game/GameManager'))(gameConfig);
+      }
+      
+      newManager.currentRound = dbSession.currentRound || 1;
+      newManager.setPlayers(initialPlayers);
+      
+      // Hook up events
+      newManager.on('state_change', (state) => {
+        io.to(sessionName).emit('game_update', state);
+        
+        // Also emit to approved viewers
+        const approved = approvedViewers.get(sessionName);
+        if (approved) {
+          approved.forEach(socketId => {
+            const viewerSocket = io.sockets.sockets.get(socketId);
+            if (viewerSocket) {
+              viewerSocket.emit('game_update', state);
+            }
+          });
+        }
+      });
+      
+      newManager.on('hand_complete', async (summary) => {
+        try {
+          const session = await prisma.gameSession.findUnique({ where: { name: sessionName } });
+          if (session) {
+            await prisma.gameHand.create({
+              data: {
+                winner: summary.winner.name,
+                potSize: summary.pot,
+                logs: JSON.stringify(summary.logs || []),
+                sessionId: session.id
+              }
+            });
+            
+            if (summary.netChanges) {
+              for (const [playerId, change] of Object.entries(summary.netChanges)) {
+                const pid = parseInt(playerId);
+                await prisma.player.update({
+                  where: { id: pid },
+                  data: { sessionBalance: { increment: change } }
+                });
+              }
+            }
+            
+            await prisma.gameSession.update({
+              where: { id: session.id },
+              data: { currentRound: summary.currentRound }
+            });
+          }
+        } catch (e) {
+          console.error('[ERROR] Failed to save hand persistence:', e);
+        }
+        
+        io.to(sessionName).emit('game_update', { type: 'HAND_COMPLETE', ...summary });
+      });
+      
+      newManager.on('session_ended', async (data) => {
+        try {
+          await prisma.gameSession.update({
+            where: { name: sessionName },
+            data: { isActive: false }
+          });
+          console.log(`[DEBUG] Session ${sessionName} marked as complete`);
+        } catch (e) {
+          console.error('[ERROR] Failed to mark session as complete:', e);
+        }
+        
+        io.to(sessionName).emit('session_ended', data);
+        activeSessions.delete(sessionName);
+      });
+      
+      activeSessions.set(sessionName, newManager);
+      console.log(`[DEBUG] GameManager initialized for ${sessionName} with ${initialPlayers.length} players`);
+      return newManager;
+      
+    } catch (e) {
+      console.error(`[ERROR] Failed to initialize GameManager for ${sessionName}:`, e);
+      throw e;
+    } finally {
+      sessionLoaders.delete(sessionName);
+    }
+  })();
+  
+  sessionLoaders.set(sessionName, loadPromise);
+  return await loadPromise;
+}
 
 // --- SOCKET MIDDLEWARE ---
 io.use((socket, next) => {
@@ -1876,11 +2063,21 @@ io.on('connection', (socket) => {
               });
               
               let newManager;
+              
+              // Determine game configuration based on game type
+              const gameConfig = {
+                sessionId: dbSession.id,
+                sessionName: sessionName,
+                gameLimitType: dbSession.gameLimitType || 'rounds',
+                totalRounds: dbSession.totalRounds,
+                targetScore: dbSession.targetScore
+              };
+              
               if (gameType?.code === 'rummy' && RummyGameManager) {
-                newManager = new RummyGameManager(dbSession.id, sessionName, dbSession.totalRounds);
+                newManager = new RummyGameManager(gameConfig);
               } else {
                 // Default to Teen Patti
-                newManager = new TeenPattiGameManager(dbSession.id, sessionName, dbSession.totalRounds);
+                newManager = new TeenPattiGameManager(gameConfig);
               }
               newManager.currentRound = dbSession.currentRound || 1;
               newManager.setPlayers(initialPlayers);
@@ -2034,6 +2231,15 @@ io.on('connection', (socket) => {
       const result = manager.startRound();
       console.log('[DEBUG] startRound result:', result);
       if (!result.success) socket.emit('error_message', result.error);
+    } else if (action.type === 'NEXT_ROUND') {
+      console.log('[DEBUG] Moving to next round');
+      manager.currentRound++;
+      // Emit state update
+      manager.emit('state_change', manager.getPublicState());
+    } else if (action.type === 'END_SESSION') {
+      console.log('[DEBUG] Ending session');
+      manager.endSession();
+      activeSessions.delete(action.sessionName);
     } else if (action.type === 'CANCEL_SIDE_SHOW') {
       // F1 FIX: Handle cancel side show (Teen Patti only)
       if (manager.cancelSideShow) {

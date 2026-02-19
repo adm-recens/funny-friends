@@ -4,6 +4,9 @@
 
 export const API_URL = import.meta.env.VITE_BACKEND_URL || '';
 
+// Socket.io URL (defaults to same origin as API)
+export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || API_URL || '';
+
 // Socket.io configuration
 export const SOCKET_CONFIG = {
     autoConnect: false,
