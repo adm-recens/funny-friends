@@ -1001,6 +1001,8 @@ app.get('/api/v2/sessions', requireAuth, asyncHandler(async (req, res) => {
       gameCode: s.gameType.code,
       currentRound: s.currentRound,
       totalRounds: s.totalRounds,
+      targetScore: s.targetScore,
+      gameLimitType: s.gameLimitType,
       playerCount: s._count?.players || 0,
       isActive: s.isActive,
       status: s.status,
@@ -2229,7 +2231,7 @@ io.on('connection', (socket) => {
       // Send current state
       if (manager) {
         const state = manager.getPublicState();
-        console.log('[DEBUG] Sending game_update to operator. Phase:', state.phase, 'Players:', state.players.length, 'gamePlayers:', state.gamePlayers.length);
+        console.log('[DEBUG] Sending game_update to operator. Phase:', state.phase, 'Players:', state.players?.length || 0, 'gamePlayers:', state.gamePlayers?.length || 0);
         socket.emit('game_update', state);
         
         // D1 FIX: Send pending viewer requests to reconnected operators

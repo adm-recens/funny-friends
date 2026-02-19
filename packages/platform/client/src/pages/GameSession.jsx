@@ -23,35 +23,55 @@ const GameSession = () => {
   useEffect(() => {
     const fetchSessionDetails = async () => {
       try {
+        console.log('Fetching session details for:', sessionName);
+        
         // Get sessions list
         const sessionsRes = await fetch(`${API_URL}/api/v2/sessions`, {
           credentials: 'include'
         });
         
-        if (sessionsRes.ok) {
-          const data = await sessionsRes.json();
-          const sessionData = data.sessions?.find(s => s.name === decodeURIComponent(sessionName));
+        if (!sessionsRes.ok) {
+          throw new Error(`Failed to fetch sessions: ${sessionsRes.status}`);
+        }
+        
+        const data = await sessionsRes.json();
+        console.log('Sessions data:', data);
+        
+        const decodedName = decodeURIComponent(sessionName);
+        const sessionData = data.sessions?.find(s => s.name === decodedName);
+        
+        if (sessionData) {
+          console.log('Found session:', sessionData);
+          setSession(sessionData);
+          setSessionStatus(sessionData.status || 'waiting');
           
-          if (sessionData) {
-            setSession(sessionData);
-            setSessionStatus(sessionData.status || 'waiting');
-            
-            // Fetch players for this session
-            const playersRes = await fetch(`${API_URL}/api/sessions/${encodeURIComponent(sessionName)}/players`, {
-              credentials: 'include'
-            });
-            
-            if (playersRes.ok) {
-              const playersData = await playersRes.json();
-              setPlayers(playersData.players || []);
+          // Fetch players for this session
+          console.log('Fetching players for session:', decodedName);
+          const playersRes = await fetch(`${API_URL}/api/sessions/${encodeURIComponent(decodedName)}/players`, {
+            credentials: 'include'
+          });
+          
+          if (playersRes.ok) {
+            const playersData = await playersRes.json();
+            console.log('Players data:', playersData);
+            if (playersData.success && playersData.players) {
+              setPlayers(playersData.players);
+              console.log('Set players:', playersData.players.length);
+            } else {
+              console.error('Invalid players data:', playersData);
             }
           } else {
-            setError('Session not found');
+            const errorText = await playersRes.text();
+            console.error('Failed to fetch players:', playersRes.status, errorText);
           }
+        } else {
+          console.error('Session not found in list:', decodedName);
+          console.log('Available sessions:', data.sessions?.map(s => s.name));
+          setError('Session not found');
         }
       } catch (e) {
         console.error('Failed to fetch session:', e);
-        setError('Failed to load session');
+        setError('Failed to load session: ' + e.message);
       } finally {
         setLoading(false);
       }
