@@ -1,6 +1,10 @@
 // Fix permissions for existing operators
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '../../.env.local') });
+// Load from project root .env.local for local dev only
+// In production (Render), environment variables are set by the platform
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config({ path: path.join(__dirname, '../../.env.local') });
+}
 const prisma = require('../db');
 
 async function main() {

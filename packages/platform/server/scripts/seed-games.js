@@ -1,7 +1,10 @@
 // Seed data for game types and default admin user
 const path = require('path');
-// Load from project root .env.local for local dev (server/scripts -> server -> root)
-require('dotenv').config({ path: path.join(__dirname, '../../.env.local') });
+// Load from project root .env.local for local dev only
+// In production (Render), environment variables are set by the platform
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config({ path: path.join(__dirname, '../../.env.local') });
+}
 const bcrypt = require('bcryptjs');
 const prisma = require('../db');
 

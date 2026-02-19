@@ -3,8 +3,11 @@ const path = require('path');
 const { spawn } = require('child_process');
 // const fetch = require('node-fetch'); // Native fetch in Node 18+
 
-// Load env
-require('dotenv').config({ path: path.join(__dirname, '../../.env.local') });
+// Load from project root .env.local for local dev only
+// In production (Render), environment variables are set by the platform
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config({ path: path.join(__dirname, '../../.env.local') });
+}
 
 const prisma = new PrismaClient();
 const PORT = 3001; // Use different port to avoid conflict if running
