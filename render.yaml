@@ -10,7 +10,7 @@ services:
       - key: POSTGRES_PASSWORD
         generateValue: true
       - key: POSTGRES_DB
-        value: funny_friends_db
+        value: teen_patti_local
     disk:
       name: postgres-data
       mountPath: /var/lib/postgresql/data
@@ -22,8 +22,8 @@ services:
     runtime: node
     region: oregon
     plan: free
-    buildCommand: npm install && npm run db:generate && npm run db:push && npm run build:client
-    preDeployCommand: npm run db:push
+    buildCommand: npm install && npm run db:generate && npm run build:client
+    preDeployCommand: npm run db:push && npm run db:seed
     startCommand: npm start
     envVars:
       - key: NODE_ENV
