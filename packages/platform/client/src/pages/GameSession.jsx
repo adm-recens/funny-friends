@@ -162,7 +162,7 @@ const GameSession = () => {
       console.log('Starting game...');
       socket.emit('game_action', { 
         sessionName: decodeURIComponent(sessionName), 
-        action: { type: 'START_GAME' } 
+        type: 'START_GAME'
       });
     } else {
       setError('Not connected to game server');
@@ -174,7 +174,7 @@ const GameSession = () => {
       console.log('Ending session...');
       socket.emit('game_action', { 
         sessionName: decodeURIComponent(sessionName), 
-        action: { type: 'END_SESSION' } 
+        type: 'END_SESSION'
       });
     }
   };
@@ -184,7 +184,7 @@ const GameSession = () => {
       console.log('Next round...');
       socket.emit('game_action', { 
         sessionName: decodeURIComponent(sessionName), 
-        action: { type: 'NEXT_ROUND' } 
+        type: 'NEXT_ROUND'
       });
     }
   };
