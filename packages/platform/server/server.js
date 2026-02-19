@@ -260,20 +260,30 @@ app.get('/health', (req, res) => {
 // Helper to get user from Token (Cookie or Header)
 const getUserFromRequest = (req) => {
   let token = req.cookies.token;
+  console.log('[DEBUG] getUserFromRequest - Cookie token exists:', !!token);
+  
   if (!token && req.headers.authorization) {
     const parts = req.headers.authorization.split(' ');
     if (parts.length === 2 && parts[0] === 'Bearer') {
       token = parts[1];
+      console.log('[DEBUG] getUserFromRequest - Using Bearer token from header');
     }
   }
-  if (!token) return null;
+  
+  if (!token) {
+    console.log('[DEBUG] getUserFromRequest - No token found');
+    return null;
+  }
+  
   try {
     const decoded = jwt.verify(token, SECRET, {
       issuer: SECURITY_CONFIG.JWT_ISSUER,
       audience: SECURITY_CONFIG.JWT_AUDIENCE,
     });
+    console.log('[DEBUG] getUserFromRequest - Token decoded successfully:', { id: decoded.id, role: decoded.role });
     return decoded;
   } catch (e) {
+    console.log('[DEBUG] getUserFromRequest - Token verification failed:', e.message);
     return null;
   }
 };
@@ -326,7 +336,10 @@ const asyncHandler = (fn) => (req, res, next) => {
 // Authorization middleware
 const requireAuth = async (req, res, next) => {
   const decoded = getUserFromRequest(req);
+  console.log('[DEBUG] requireAuth - decoded:', decoded);
+  
   if (!decoded) {
+    console.log('[DEBUG] requireAuth - No decoded token found');
     return ApiResponse.unauthorized(res);
   }
 
@@ -342,10 +355,12 @@ const requireAuth = async (req, res, next) => {
     });
 
     if (session.count === 0) {
+      console.log('[DEBUG] requireAuth - Session not found or expired');
       return ApiResponse.unauthorized(res, 'Session expired or invalidated');
     }
 
     req.user = decoded;
+    console.log('[DEBUG] requireAuth - User set:', req.user);
     next();
   } catch (e) {
     console.error('[ERROR] Session validation failed:', e);
@@ -356,12 +371,19 @@ const requireAuth = async (req, res, next) => {
 const requireAdmin = async (req, res, next) => {
   try {
     await requireAuth(req, res, () => {
-      if (!req.user || req.user.role !== 'ADMIN') {
-        return ApiResponse.forbidden(res, 'Admin access required');
+      console.log('[DEBUG] requireAdmin - req.user:', req.user);
+      if (!req.user) {
+        console.log('[DEBUG] requireAdmin - No user in request');
+        return ApiResponse.forbidden(res, 'Admin access required - Not authenticated');
+      }
+      if (req.user.role !== 'ADMIN') {
+        console.log(`[DEBUG] requireAdmin - User role '${req.user.role}' is not ADMIN`);
+        return ApiResponse.forbidden(res, 'Admin access required - Insufficient permissions');
       }
       next();
     });
   } catch (e) {
+    console.error('[ERROR] requireAdmin middleware error:', e);
     return ApiResponse.forbidden(res, 'Admin access required');
   }
 };
