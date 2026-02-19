@@ -958,24 +958,25 @@ app.get('/api/v2/sessions', requireAuth, asyncHandler(async (req, res) => {
 
   let sessions;
   if (role === 'ADMIN') {
-    // Admin sees all active sessions
+    // Admin sees all sessions (active and ended)
     sessions = await prisma.gameSession.findMany({
-      where: { isActive: true },
       include: {
         gameType: true,
         _count: { select: { players: true } }
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      take: 100 // Limit to recent 100 sessions for performance
     });
   } else if (role === 'OPERATOR') {
-    // Operator sees their own sessions
+    // Operator sees their own sessions (all)
     sessions = await prisma.gameSession.findMany({
       where: { createdBy: userId },
       include: {
         gameType: true,
         _count: { select: { players: true } }
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      take: 100
     });
   } else {
     // Players see sessions they are part of
@@ -1057,7 +1058,8 @@ app.get('/api/sessions/:name/players', requireAuth, asyncHandler(async (req, res
         name: p.name,
         seat: p.seatPosition,
         sessionBalance: p.sessionBalance,
-        status: p.status || 'ACTIVE'
+        score: p.score,
+        status: p.status || 'PLAYING'
       }))
     });
   } catch (error) {
@@ -2098,7 +2100,9 @@ io.on('connection', (socket) => {
                 id: p.id,
                 name: p.name,
                 sessionBalance: p.sessionBalance,
-                seat: p.seatPosition
+                score: p.score || p.sessionBalance, // Use score for Rummy, fallback to sessionBalance
+                seat: p.seatPosition,
+                status: p.status || 'PLAYING'
               }));
 
               // Get game type to determine which GameManager to use
@@ -2160,17 +2164,32 @@ io.on('connection', (socket) => {
                       }
                     });
 
-                    // Update player balances
+                    // Update player balances/scores
                     if (summary.netChanges) {
                       for (const [playerId, change] of Object.entries(summary.netChanges)) {
                         const pid = parseInt(playerId);
-                        // Update player session balance atomically
-                        await prisma.player.update({
-                          where: { id: pid },
-                          data: {
-                            sessionBalance: { increment: change }
-                          }
-                        });
+                        // Update based on game type - check if score field exists (Rummy) or sessionBalance (Teen Patti)
+                        // For Rummy, change is the new total score
+                        // For Teen Patti, change is the increment to add
+                        const player = await prisma.player.findUnique({ where: { id: pid } });
+                        if (player && player.score !== undefined) {
+                          // Rummy - set absolute score
+                          await prisma.player.update({
+                            where: { id: pid },
+                            data: {
+                              score: change,
+                              status: change >= (gameConfig.targetScore || 100) + 1 ? 'ELIMINATED' : 'PLAYING'
+                            }
+                          });
+                        } else {
+                          // Teen Patti - increment
+                          await prisma.player.update({
+                            where: { id: pid },
+                            data: {
+                              sessionBalance: { increment: change }
+                            }
+                          });
+                        }
                       }
                     }
 
