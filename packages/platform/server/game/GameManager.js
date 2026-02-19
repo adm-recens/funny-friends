@@ -201,6 +201,18 @@ class GameManager extends EventEmitter {
     }
 
     handleAction(action) {
+        // Ledger actions (operator recording physical game)
+        if (action.type === 'ADD_TO_POT') {
+            return this.addToPot(action.playerId, action.amount);
+        }
+        if (action.type === 'RECORD_WINNER') {
+            return this.recordWinner(action.winnerId);
+        }
+        if (action.type === 'RESET_ROUND') {
+            return this.resetRound();
+        }
+        
+        // Automated game actions (for online play)
         if (action.type === 'CANCEL_SIDE_SHOW') {
             return this.cancelSideShow();
         }
@@ -571,8 +583,94 @@ class GameManager extends EventEmitter {
             currentRound: this.currentRound,
             totalRounds: this.totalRounds,
             gameLimitType: this.gameLimitType,
-            targetScore: this.targetScore
+            targetScore: this.gameState.targetScore
         };
+    }
+
+    // Ledger Methods (Operator recording physical game)
+    addToPot(playerId, amount) {
+        const player = this.gameState.players.find(p => p.id === playerId);
+        if (!player) {
+            return { success: false, error: "Player not found" };
+        }
+        if (!amount || amount <= 0) {
+            return { success: false, error: "Invalid amount" };
+        }
+        
+        player.invested = (player.invested || 0) + amount;
+        this.gameState.pot = (this.gameState.pot || 0) + amount;
+        this.gameState.currentLogs.push(`${player.name} added ${amount} to pot. Total pot: ${this.gameState.pot}`);
+        
+        this.emit('state_change', this.getPublicState());
+        return { success: true, player, pot: this.gameState.pot };
+    }
+
+    recordWinner(winnerId) {
+        const winner = this.gameState.players.find(p => p.id === winnerId);
+        if (!winner) {
+            return { success: false, error: "Winner not found" };
+        }
+
+        this.gameState.winner = winner;
+        this.gameState.currentLogs.push(`🏆 ${winner.name} wins Round ${this.currentRound}! Pot: ${this.gameState.pot}`);
+
+        const netChanges = {};
+        this.gameState.players.forEach(p => {
+            const invested = p.invested || 0;
+            if (p.id === winner.id) {
+                netChanges[p.id] = this.gameState.pot - invested;
+                p.sessionBalance = (p.sessionBalance || 0) + netChanges[p.id];
+            } else {
+                netChanges[p.id] = -invested;
+                p.sessionBalance = (p.sessionBalance || 0) + netChanges[p.id];
+            }
+            // Reset invested for next round
+            p.invested = 0;
+        });
+
+        this.currentRound++;
+        const isSessionOver = this.currentRound > this.totalRounds;
+
+        this.emit('state_change', this.getPublicState());
+        
+        this.emit('hand_complete', {
+            winner,
+            pot: this.gameState.pot,
+            netChanges,
+            currentRound: this.currentRound,
+            isSessionOver
+        });
+        
+        if (isSessionOver) {
+            this.isActive = false;
+            this.emit('session_ended', { 
+                reason: 'MAX_ROUNDS_REACHED',
+                finalRound: this.currentRound - 1,
+                totalRounds: this.totalRounds
+            });
+        }
+
+        return { success: true, winner, pot: this.gameState.pot };
+    }
+
+    resetRound() {
+        this.gameState.pot = 0;
+        this.gameState.winner = null;
+        this.gameState.currentLogs.push(`Round ${this.currentRound} reset. Starting fresh.`);
+        
+        this.emit('state_change', this.getPublicState());
+        return { success: true };
+    }
+
+    endSession() {
+        this.isActive = false;
+        this.gameState.phase = 'ENDED';
+        this.emit('session_ended', {
+            reason: 'MANUAL_END',
+            finalRound: this.currentRound,
+            totalRounds: this.totalRounds,
+            players: this.gameState.players
+        });
     }
 }
 
