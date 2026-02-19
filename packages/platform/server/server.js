@@ -2332,27 +2332,43 @@ io.on('connection', (socket) => {
         }
       }
     } else if (action.type === 'DISCARD_CARD') {
-      // Rummy specific
+      // Old Rummy specific - deprecated
       if (manager.discardCard) {
         const result = manager.discardCard(socket.user.id, action.cardId);
         if (!result.success) socket.emit('error_message', result.error);
       }
-    } else if (action.type === 'DECLARE_RUMMY') {
-      // Rummy specific
-      if (manager.declareRummy) {
-        const result = manager.declareRummy(socket.user.id, action.combinations);
+    } else if (action.type === 'RECORD_POINTS') {
+      // Rummy Ledger: Record points for a player
+      if (manager.handleAction) {
+        const result = manager.handleAction(action);
         if (!result.success) socket.emit('error_message', result.error);
       }
-    } else if (action.type === 'SHOW_CARDS') {
-      // Rummy specific
-      if (manager.showCards) {
-        const result = manager.showCards(socket.user.id, action.combinations);
+    } else if (action.type === 'RECORD_WINNER') {
+      // Ledger: Record round winner
+      if (manager.handleAction) {
+        const result = manager.handleAction(action);
+        if (!result.success) socket.emit('error_message', result.error);
+      }
+    } else if (action.type === 'ELIMINATE_PLAYER') {
+      // Rummy Ledger: Eliminate a player
+      if (manager.handleAction) {
+        const result = manager.handleAction(action);
+        if (!result.success) socket.emit('error_message', result.error);
+      }
+    } else if (action.type === 'ADD_TO_POT') {
+      // Teen Patti Ledger: Add to pot
+      if (manager.handleAction) {
+        const result = manager.handleAction(action);
         if (!result.success) socket.emit('error_message', result.error);
       }
     } else {
-      // Teen Patti actions
-      const result = manager.handleAction(action);
-      if (!result.success) socket.emit('error_message', result.error);
+      // Default: pass to manager's handleAction
+      if (manager.handleAction) {
+        const result = manager.handleAction(action);
+        if (!result.success) socket.emit('error_message', result.error);
+      } else {
+        socket.emit('error_message', 'Game manager does not support this action');
+      }
     }
   });
 
