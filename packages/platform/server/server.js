@@ -24,7 +24,7 @@ try {
 }
 
 try {
-  RummyGameManager = require('../../rummy/server/GameManager');
+  RummyGameManager = require('./game/rummy/GameManager');
   console.log('[INFO] Rummy game manager loaded');
 } catch (e) {
   console.log('[INFO] Rummy game not available:', e.message);
