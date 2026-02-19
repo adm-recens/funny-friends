@@ -1021,6 +1021,49 @@ app.get('/api/csrf-token', requireAuth, (req, res) => {
   res.json({ csrfToken });
 });
 
+// GET /api/sessions/:name/players - Get players for a session
+app.get('/api/sessions/:name/players', requireAuth, asyncHandler(async (req, res) => {
+  const { name } = req.params;
+  
+  try {
+    // Find session
+    const session = await prisma.gameSession.findUnique({
+      where: { name: decodeURIComponent(name) },
+      include: {
+        players: true
+      }
+    });
+    
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    // Check if user has access (admin, operator who created it, or player in session)
+    const hasAccess = 
+      req.user.role === 'ADMIN' ||
+      session.createdBy === req.user.id ||
+      session.players.some(p => p.userId === req.user.id);
+    
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    res.json({
+      success: true,
+      players: session.players.map(p => ({
+        id: p.id,
+        name: p.name,
+        seat: p.seatPosition,
+        sessionBalance: p.sessionBalance,
+        status: p.status || 'ACTIVE'
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching session players:', error);
+    res.status(500).json({ error: 'Failed to fetch players' });
+  }
+}));
+
 // CSRF validation middleware for state-changing operations
 const requireCSRF = (req, res, next) => {
   const csrfToken = req.headers['x-csrf-token'] || req.body?._csrf;

@@ -144,7 +144,10 @@ class GameManager extends EventEmitter {
   startRound() {
     console.log(`[GameManager] Round ${this.currentRound} started`);
     this.gameState.phase = 'ACTIVE';
-    return this.getPublicState();
+    const state = this.getPublicState();
+    // Emit state change to all listeners
+    this.emit('state_change', state);
+    return { success: true, ...state };
   }
 
   processAction(socketId, action) {
