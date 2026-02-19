@@ -2687,9 +2687,13 @@ async function initializeDatabase() {
         });
         console.log('[INFO] Database schema pushed successfully');
         
-        // Seed the database
+        // Seed the database using execSync to avoid process.exit() issues
         console.log('[INFO] Seeding database...');
-        const seedScript = require('./scripts/seed-games.js');
+        execSync('node scripts/seed-games.js', {
+          cwd: __dirname,
+          stdio: 'inherit',
+          env: { ...process.env, NODE_ENV: 'production' }
+        });
         console.log('[INFO] Database seeded successfully');
       } else {
         throw e;
