@@ -2,9 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Users, Play, Square, RotateCcw, 
-  Clock, DollarSign, AlertCircle, Wifi, WifiOff,
-  Eye, Trash2, ShieldAlert, Trophy, Edit3, X,
-  Check, UserPlus, ArrowDown, ArrowUp, Star
+  Clock, AlertCircle, Wifi, WifiOff,
+  Trash2, Trophy, X, Check, UserPlus, Star, Plus, Minus
 } from 'lucide-react';
 import { API_URL } from '../config';
 import { useAuth } from '../context/AuthContext';
@@ -25,10 +24,6 @@ const GameSession = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [sessionStatus, setSessionStatus] = useState('waiting');
   
-  const [showSideShowSelection, setShowSideShowSelection] = useState(false);
-  const [showShowSelection, setShowShowSelection] = useState(false);
-  const [sideShowRequest, setSideShowRequest] = useState(null);
-  const [showRequest, setShowRequest] = useState(null);
   const [roundSummaryData, setRoundSummaryData] = useState(null);
   const [showRoundSummary, setShowRoundSummary] = useState(false);
   const [sessionSummaryData, setSessionSummaryData] = useState(null);
@@ -37,11 +32,11 @@ const GameSession = () => {
   const [newPlayerNames, setNewPlayerNames] = useState('');
   const [showPlayerRequestModal, setShowPlayerRequestModal] = useState(false);
   
-  // Rummy specific
-  const [selectedCard, setSelectedCard] = useState(null);
-  const [playerHand, setPlayerHand] = useState([]);
-  const [showDeclareModal, setShowDeclareModal] = useState(false);
-  const [showResolveDeclareModal, setShowResolveDeclareModal] = useState(false);
+  // Ledger actions
+  const [showPointsModal, setShowPointsModal] = useState(false);
+  const [showWinnerModal, setShowWinnerModal] = useState(false);
+  const [selectedPlayer, setSelectedPlayer] = useState(null);
+  const [pointsInput, setPointsInput] = useState('');
 
   const isOperatorOrAdmin = user?.role === 'OPERATOR' || user?.role === 'ADMIN';
   const isRummy = session?.gameCode === 'rummy';
@@ -139,14 +134,6 @@ const GameSession = () => {
         if (state.phase) {
           setSessionStatus(state.phase.toLowerCase());
         }
-        setSideShowRequest(state.sideShowRequest || null);
-        setShowRequest(state.showRequest || null);
-      }
-    };
-
-    const onHandUpdate = (data) => {
-      if (data.playerId === user?.id || isOperatorOrAdmin) {
-        setPlayerHand(data.hand || []);
       }
     };
 
@@ -171,7 +158,6 @@ const GameSession = () => {
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
     socket.on('game_update', onGameUpdate);
-    socket.on('hand_update', onHandUpdate);
     socket.on('viewer_requested', onViewerRequested);
     socket.on('session_ended', onSessionEnded);
     socket.on('error_message', onErrorMessage);
@@ -188,20 +174,17 @@ const GameSession = () => {
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
       socket.off('game_update', onGameUpdate);
-      socket.off('hand_update', onHandUpdate);
       socket.off('viewer_requested', onViewerRequested);
       socket.off('session_ended', onSessionEnded);
       socket.off('error_message', onErrorMessage);
       socket.emit('leave_session', { sessionName: decodedSessionName });
     };
-  }, [socket, sessionName, isOperatorOrAdmin, user]);
+  }, [socket, sessionName, isOperatorOrAdmin]);
 
   const sendGameAction = (type, payload = {}) => {
-    const activePlayer = gamePlayers[gameState?.activePlayerIndex || 0];
     socket.emit('game_action', {
       sessionName: decodeURIComponent(sessionName),
       type,
-      playerId: activePlayer?.id,
       ...payload
     });
   };
@@ -229,62 +212,38 @@ const GameSession = () => {
     }
   };
 
-  // Teen Patti Actions
-  const handleFold = () => sendGameAction('FOLD');
-  const handleSeen = () => sendGameAction('SEEN');
-  const handleBet = (isDouble = false) => sendGameAction('BET', { isDouble });
-  const handleCustomBid = () => {
-    const amount = prompt(`Enter custom bid (Min ${gameState?.currentStake || 20}):`, gameState?.currentStake || 20);
-    if (amount) sendGameAction('BET', { amount: parseInt(amount) });
-  };
-  const handleSideShow = () => setShowSideShowSelection(true);
-  const handleSideShowSelect = (targetId) => {
-    sendGameAction('SIDE_SHOW_REQUEST', { targetId });
-    setShowSideShowSelection(false);
-  };
-  const handleShow = () => {
-    const remaining = gamePlayers.filter(p => !p.folded);
-    const blindPlayers = remaining.filter(p => p.status === 'BLIND');
-    const activePlayer = gamePlayers[gameState?.activePlayerIndex];
-    
-    if (activePlayer?.status === 'SEEN' && blindPlayers.length > 0 && blindPlayers.length <= 2) {
-      setShowRequest({ requester: activePlayer, blindPlayers });
-      setShowShowSelection(true);
-    } else if (remaining.length === 2) {
-      sendGameAction('SHOW');
-    } else {
-      toast.info('Force Show only allowed when 1 or 2 blind players remain');
-    }
-  };
-  const handleShowSelect = (targetId) => {
-    sendGameAction('SHOW', { targetId });
-    setShowShowSelection(false);
-    setShowRequest(null);
+  // Ledger actions
+  const openPointsModal = (player) => {
+    setSelectedPlayer(player);
+    setPointsInput('');
+    setShowPointsModal(true);
   };
 
-  // Rummy Actions
-  const handleDrawCard = (source = 'draw') => {
-    const activePlayer = gamePlayers[gameState?.activePlayerIndex];
-    sendGameAction('DRAW_CARD', { source });
-  };
-
-  const handleDiscardCard = () => {
-    if (!selectedCard) {
-      toast.error('Please select a card to discard');
+  const handleAddPoints = () => {
+    const points = parseInt(pointsInput);
+    if (isNaN(points) || points <= 0) {
+      toast.error('Please enter valid points');
       return;
     }
-    sendGameAction('DISCARD_CARD', { cardId: selectedCard });
-    setSelectedCard(null);
+    sendGameAction('RECORD_POINTS', { playerId: selectedPlayer.id, points });
+    setShowPointsModal(false);
+    setSelectedPlayer(null);
+    setPointsInput('');
   };
 
-  const handleDeclareRummy = () => {
-    sendGameAction('DECLARE_RUMMY');
-    setShowDeclareModal(false);
+  const openWinnerModal = () => {
+    setShowWinnerModal(true);
   };
 
-  const handleResolveDeclare = (winnerId) => {
-    sendGameAction('RESOLVE_DECLARE', { winnerId });
-    setShowResolveDeclareModal(false);
+  const handleRecordWinner = (winnerId) => {
+    sendGameAction('RECORD_WINNER', { winnerId });
+    setShowWinnerModal(false);
+  };
+
+  const handleEliminate = (playerId) => {
+    if (confirm('Are you sure you want to eliminate this player?')) {
+      sendGameAction('ELIMINATE_PLAYER', { playerId });
+    }
   };
 
   // Viewer actions
@@ -334,43 +293,16 @@ const GameSession = () => {
     switch (phase?.toUpperCase()) {
       case 'ACTIVE':
       case 'PLAYING':
-      case 'DRAW':
         return 'bg-green-500/20 text-green-400';
-      case 'DISCARD':
-        return 'bg-blue-500/20 text-blue-400';
       case 'SETUP':
       case 'WAITING':
         return 'bg-yellow-500/20 text-yellow-400';
-      case 'SHOWDOWN':
-        return 'bg-purple-500/20 text-purple-400';
       case 'COMPLETED':
       case 'ENDED':
         return 'bg-slate-500/20 text-slate-400';
       default:
         return 'bg-yellow-500/20 text-yellow-400';
     }
-  };
-
-  const getCardDisplay = (card) => {
-    const isJoker = card.isJoker || card.isWildJoker;
-    const isRed = card.suit === '♥' || card.suit === '♦';
-    
-    if (isJoker) {
-      return (
-        <div className="w-12 h-16 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-lg flex items-center justify-center text-2xl shadow-md">
-          ★
-        </div>
-      );
-    }
-    
-    return (
-      <div className={`w-12 h-16 rounded-lg flex flex-col items-center justify-center text-xs font-bold shadow-md ${
-        isRed ? 'bg-red-100 text-red-700' : 'bg-white text-slate-700'
-      }`}>
-        <span className="text-lg leading-none">{card.rank}</span>
-        <span className="text-lg leading-none">{card.suit}</span>
-      </div>
-    );
   };
 
   if (loading) {
@@ -393,17 +325,7 @@ const GameSession = () => {
   }
 
   const currentPhase = gameState?.phase || sessionStatus?.toUpperCase() || 'SETUP';
-  
-  // Teen Patti specific
-  const activePlayer = gamePlayers[gameState?.activePlayerIndex || 0];
-  const isBlind = activePlayer?.status === 'BLIND';
-  const currentStake = gameState?.currentStake || 20;
-  const cost = isBlind ? currentStake / 2 : currentStake;
-  const remainingPlayers = gamePlayers.filter(p => !p.folded);
-  const blindPlayers = remainingPlayers.filter(p => p.status === 'BLIND');
-  const canForceShow = activePlayer?.status === 'SEEN' && blindPlayers.length > 0 && blindPlayers.length <= 2;
-  const canShow = remainingPlayers.length === 2;
-  const seenPlayers = gamePlayers.filter(p => p.status === 'SEEN' && !p.folded && p.id !== activePlayer?.id);
+  const activePlayers = gameState?.players?.filter(p => p.status !== 'ELIMINATED') || players.filter(p => p.status !== 'ELIMINATED');
 
   return (
     <div className="min-h-screen bg-slate-900 relative overflow-hidden">
@@ -431,15 +353,11 @@ const GameSession = () => {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {isRummy ? (
+              {isRummy && (
                 <div className="flex items-center gap-2 text-yellow-400 text-sm">
                   <Star size={16} />
-                  <span>Wild: {gameState?.wildJokerRank || '-'}</span>
+                  <span>Target: {gameState?.targetScore || 100}</span>
                 </div>
-              ) : (
-                <span className="text-xl font-bold text-yellow-500">
-                  Pot: {gameState?.pot || 0}
-                </span>
               )}
               {isConnected ? (
                 <Wifi size={16} className="text-green-500" />
@@ -450,30 +368,6 @@ const GameSession = () => {
           </div>
         </div>
       </div>
-
-      {/* Current Turn Banner */}
-      {currentPhase === 'ACTIVE' && activePlayer && !sideShowRequest && !showRequest && !isRummy && (
-        <div className="bg-gradient-to-r from-yellow-600 to-amber-600 text-white px-4 py-2 text-center shadow-lg relative z-10">
-          <div className="flex items-center justify-center gap-2">
-            <span className="animate-pulse">●</span>
-            <span className="font-bold">Current Turn:</span>
-            <span className="text-xl font-black">{activePlayer.name}</span>
-            <span className="text-sm opacity-80">({activePlayer.status})</span>
-          </div>
-        </div>
-      )}
-
-      {/* Rummy Turn Banner */}
-      {isRummy && currentPhase !== 'SETUP' && activePlayer && (
-        <div className="bg-gradient-to-r from-orange-600 to-amber-600 text-white px-4 py-2 text-center shadow-lg relative z-10">
-          <div className="flex items-center justify-center gap-2">
-            <span className="animate-pulse">●</span>
-            <span className="font-bold">Current Turn:</span>
-            <span className="text-xl font-black">{activePlayer.name}</span>
-            <span className="text-sm opacity-80">({currentPhase})</span>
-          </div>
-        </div>
-      )}
 
       {/* Content */}
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -527,7 +421,6 @@ const GameSession = () => {
             {viewerRequests.length > 0 && (
               <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
                 <h2 className="text-lg font-semibold text-slate-50 mb-4 flex items-center gap-2">
-                  <Eye size={18} className="text-blue-400" />
                   Access Requests
                 </h2>
                 <div className="space-y-2">
@@ -565,224 +458,104 @@ const GameSession = () => {
           </div>
         )}
 
-        {/* ACTIVE GAME */}
+        {/* ACTIVE GAME - LEDGER STYLE */}
         {currentPhase !== 'SETUP' && (
           <div className="space-y-6">
             
-            {/* Rummy: Draw/Discard Area */}
-            {isRummy && (
-              <div className="flex items-center justify-center gap-8 py-4">
-                {/* Draw Pile */}
-                <div 
-                  onClick={() => currentPhase === 'DRAW' && handleDrawCard('draw')}
-                  className={`relative cursor-pointer transform hover:scale-105 transition-transform ${currentPhase !== 'DRAW' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  <div className="w-20 h-28 bg-slate-700 rounded-xl border-2 border-slate-500 flex items-center justify-center">
-                    <div className="text-slate-400 text-center">
-                      <ArrowDown size={24} className="mx-auto mb-1" />
-                      <span className="text-xs">Draw</span>
-                      <div className="text-xs text-slate-500">{gameState?.drawPileCount || 0}</div>
-                    </div>
-                  </div>
-                  <div className="absolute -top-2 -right-2 w-8 h-8 bg-slate-600 rounded-full flex items-center justify-center text-xs font-bold text-white">
-                    {gameState?.drawPileCount || 0}
-                  </div>
-                </div>
+            {/* Game Logs */}
+            <div className="bg-slate-800 rounded-xl border border-slate-700 p-4">
+              <h3 className="text-sm font-semibold text-slate-400 mb-2">Game Log</h3>
+              <div className="h-24 overflow-y-auto text-sm text-slate-300 space-y-1">
+                {gameState?.currentLogs?.slice(-5).map((log, i) => (
+                  <div key={i} className="text-slate-400">{log}</div>
+                )) || gameState?.currentLogs?.map((log, i) => (
+                  <div key={i} className="text-slate-400">{log}</div>
+                )) || <div className="text-slate-500">No logs yet</div>}
+              </div>
+            </div>
 
-                {/* VS */}
-                <div className="text-slate-500 font-bold text-2xl">VS</div>
-
-                {/* Discard Pile */}
-                <div 
-                  onClick={() => currentPhase === 'DRAW' && handleDrawCard('discard')}
-                  className={`relative cursor-pointer transform hover:scale-105 transition-transform ${currentPhase !== 'DRAW' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  {gameState?.discardPile?.[0] ? (
-                    getCardDisplay(gameState.discardPile[0])
-                  ) : (
-                    <div className="w-12 h-16 bg-slate-700 rounded-lg flex items-center justify-center">
-                      <span className="text-slate-500 text-xs">Empty</span>
-                    </div>
-                  )}
-                  <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs text-slate-400 whitespace-nowrap">
-                    Discard
-                  </div>
+            {/* Players with Scores */}
+            <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-slate-50 flex items-center gap-2">
+                  <Users size={18} className="text-violet-400" />
+                  Players
+                </h2>
+                <div className="flex gap-2">
+                  <button
+                    onClick={openWinnerModal}
+                    disabled={!isOperatorOrAdmin}
+                    className="px-3 py-1 bg-yellow-500/20 text-yellow-400 rounded-lg text-sm font-medium hover:bg-yellow-500/30 flex items-center gap-1"
+                  >
+                    <Trophy size={14} /> Record Winner
+                  </button>
                 </div>
               </div>
-            )}
 
-            {/* Players Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              {gamePlayers.map((p, idx) => {
-                const isActive = idx === gameState?.activePlayerIndex;
-                
-                if (isRummy) {
-                  const isEliminated = p.status === 'ELIMINATED';
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {(gameState?.players || players).map((player, index) => {
+                  const isEliminated = player.status === 'ELIMINATED';
+                  
                   return (
                     <div 
-                      key={p.id || idx} 
-                      className={`relative p-4 rounded-2xl border-2 transition-all ${
-                        isActive ? 'border-orange-500 bg-slate-800 shadow-[0_0_30px_rgba(234,88,12,0.3)]' : 'border-slate-700 bg-slate-800/50'
-                      } ${isEliminated ? 'opacity-50 grayscale' : ''}`}
+                      key={player.id || index}
+                      className={`relative p-4 rounded-xl border-2 transition-all ${
+                        isEliminated 
+                          ? 'border-red-800 bg-red-900/20 opacity-60' 
+                          : 'border-slate-700 bg-slate-700/30'
+                      }`}
                     >
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex flex-col">
-                          <span className={`font-bold text-lg ${isActive ? 'text-white' : 'text-slate-400'}`}>{p.name}</span>
-                          {isEliminated && <span className="text-xs text-red-400">ELIMINATED</span>}
-                        </div>
-                        <span className={`text-xs font-bold px-2 py-1 rounded ${
-                          p.score >= (gameState?.targetScore || 100) ? 'bg-red-500/30 text-red-400' : 'bg-green-500/30 text-green-400'
-                        }`}>
-                          {p.score} pts
-                        </span>
-                      </div>
+                      {isEliminated && (
+                        <div className="absolute top-2 right-2 text-xs text-red-400 font-bold">ELIMINATED</div>
+                      )}
                       
-                      {isActive && !isEliminated && (
-                        <div className="absolute -top-3 -right-3 w-6 h-6 bg-orange-500 rounded-full animate-bounce shadow-lg"></div>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-violet-600 rounded-full flex items-center justify-center text-sm font-bold text-white">
+                            {player.name?.[0]?.toUpperCase() || '?'}
+                          </div>
+                          <div>
+                            <div className="font-medium text-slate-50">{player.name}</div>
+                            <div className="text-xs text-slate-400">Seat {player.seat || index + 1}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Score Display */}
+                      <div className="text-center mb-3">
+                        <div className="text-3xl font-bold text-white">
+                          {player.score || player.sessionBalance || 0}
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          {isRummy ? 'points' : 'points'}
+                        </div>
+                      </div>
+
+                      {/* Action Buttons */}
+                      {isOperatorOrAdmin && !isEliminated && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => openPointsModal(player)}
+                            className="flex-1 py-2 bg-blue-500/20 text-blue-400 rounded-lg text-sm font-medium hover:bg-blue-500/30 flex items-center justify-center gap-1"
+                          >
+                            <Plus size={14} /> Add Points
+                          </button>
+                          {isRummy && (
+                            <button
+                              onClick={() => handleEliminate(player.id)}
+                              className="px-3 py-2 bg-red-500/20 text-red-400 rounded-lg text-sm font-medium hover:bg-red-500/30"
+                              title="Eliminate player"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   );
-                }
-                
-                // Teen Patti display
-                const isTPActive = idx === gameState?.activePlayerIndex;
-                const isTarget = sideShowRequest?.target?.id === p.id;
-                const isRequester = sideShowRequest?.requester?.id === p.id;
-
-                return (
-                  <div 
-                    key={p.id || idx} 
-                    className={`relative p-4 rounded-2xl border-2 transition-all duration-300 flex flex-col justify-between min-h-[140px] ${
-                      isTPActive ? 'border-yellow-500 bg-slate-800 shadow-[0_0_30px_rgba(234,179,8,0.3)] scale-[1.02] ring-2 ring-yellow-500/50' : 'border-slate-700 bg-slate-800/50'
-                    } ${
-                      p.folded ? 'opacity-40 grayscale border-slate-800' : ''
-                    } ${
-                      (isTarget || isRequester) ? 'ring-2 ring-blue-500 z-20' : ''
-                    }`}
-                  >
-                    <div className="flex justify-between items-start">
-                      <div className="flex flex-col">
-                        <span className={`font-bold text-lg ${isTPActive ? 'text-white' : 'text-slate-400'}`}>{p.name}</span>
-                        <span className="text-xs text-slate-500">Seat {p.seat}</span>
-                      </div>
-                      {!p.folded && (
-                        <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase ${
-                          p.status === 'BLIND' ? 'bg-slate-700 text-slate-400' : 'bg-blue-900 text-blue-300'
-                        }`}>
-                          {p.status}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="mt-4">
-                      <div className="text-slate-400 text-xs uppercase tracking-wider mb-1">Invested</div>
-                      <div className="font-mono text-xl text-yellow-500/80">{p.invested}</div>
-                    </div>
-
-                    {isTPActive && !p.folded && (
-                      <>
-                        <div className="absolute -top-3 -right-3 w-6 h-6 bg-yellow-500 rounded-full animate-bounce shadow-lg"></div>
-                        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-yellow-500 text-black text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">
-                          Turn
-                        </div>
-                      </>
-                    )}
-                  </div>
-                );
-              })}
+                })}
+              </div>
             </div>
-
-            {/* Teen Patti Controls */}
-            {isOperatorOrAdmin && activePlayer && !sideShowRequest && !showRequest && !isRummy && (
-              <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
-                <div className="flex justify-between items-end mb-4">
-                  <div>
-                    <div className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Active Turn</div>
-                    <div className="text-2xl font-bold text-white flex items-center gap-2">
-                      {activePlayer.name} 
-                      <span className="text-sm bg-slate-700 px-2 py-1 rounded text-yellow-500 border border-yellow-500/20">
-                        {activePlayer.status}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Current Chaal</div>
-                    <div className="text-2xl font-mono text-yellow-500">{currentStake}</div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-4 gap-3 mb-3">
-                  <button onClick={handleFold} className="col-span-1 bg-gradient-to-br from-red-500/10 to-red-900/20 border border-red-500/30 text-red-500 rounded-xl font-bold text-sm hover:bg-red-500/20 flex flex-col items-center justify-center gap-1 py-3">
-                    <Trash2 size={20} /> PACK
-                  </button>
-                  <button onClick={handleSideShow} disabled={isBlind || seenPlayers.length === 0} className={`col-span-1 bg-gradient-to-br from-blue-500/10 to-blue-900/20 border border-blue-500/30 text-blue-400 rounded-xl font-bold text-sm flex flex-col items-center justify-center gap-1 py-3 ${(isBlind || seenPlayers.length === 0) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-500/20'}`}>
-                    <ShieldAlert size={20} /> <span>SIDE SHOW</span>
-                  </button>
-                  <button onClick={() => handleBet(false)} className="col-span-1 bg-gradient-to-b from-yellow-500 to-yellow-600 text-black rounded-xl font-black text-xl flex flex-col items-center justify-center py-3">
-                    <span className="text-xs font-bold opacity-60">Chaal</span>
-                    <span>{cost}</span>
-                  </button>
-                  <div className="col-span-1 grid grid-rows-2 gap-2">
-                    <button onClick={() => handleBet(true)} className="bg-slate-700 text-green-400 rounded-lg text-xs font-bold">x2 Raise</button>
-                    <button onClick={handleCustomBid} className="bg-slate-700 text-yellow-400 rounded-lg text-xs font-bold flex items-center justify-center gap-1"><Edit3 size={12} /> Custom</button>
-                  </div>
-                </div>
-
-                <div className="flex gap-3">
-                  <button onClick={handleSeen} disabled={!isBlind} className={`flex-1 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border ${isBlind ? 'border-blue-500/30 text-blue-400 hover:bg-blue-500/10' : 'border-slate-700 text-slate-600 opacity-50 cursor-not-allowed'}`}>
-                    <Eye size={16} /> SEE CARDS
-                  </button>
-                  <button onClick={handleShow} disabled={!canShow && !canForceShow} className={`flex-1 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border ${canShow || canForceShow ? 'bg-slate-700 border-yellow-500/30 text-yellow-500 hover:bg-yellow-500/10' : 'border-slate-700 text-slate-600 opacity-50 cursor-not-allowed'}`}>
-                    <Trophy size={16} /> {canForceShow ? 'FORCE SHOW' : 'SHOW'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Rummy Controls */}
-            {isOperatorOrAdmin && activePlayer && isRummy && currentPhase !== 'SETUP' && (
-              <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
-                <div className="flex justify-between items-end mb-4">
-                  <div>
-                    <div className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Current Player</div>
-                    <div className="text-2xl font-bold text-white">{activePlayer.name}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Phase</div>
-                    <div className="text-2xl font-mono text-orange-500">{currentPhase}</div>
-                  </div>
-                </div>
-
-                {currentPhase === 'DISCARD' && selectedCard && (
-                  <button
-                    onClick={handleDiscardCard}
-                    className="w-full py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-bold mb-4 flex items-center justify-center gap-2"
-                  >
-                    <Trash2 size={20} /> Discard Selected Card
-                  </button>
-                )}
-
-                {gameState?.declaredPlayer && !showResolveDeclareModal && (
-                  <div className="mb-4">
-                    <button
-                      onClick={() => setShowResolveDeclareModal(true)}
-                      className="w-full py-3 bg-gradient-to-r from-yellow-500 to-orange-500 text-black rounded-xl font-bold flex items-center justify-center gap-2"
-                    >
-                      <Trophy size={20} /> Resolve Declaration
-                    </button>
-                  </div>
-                )}
-
-                {currentPhase === 'DRAW' && (
-                  <button
-                    onClick={() => setShowDeclareModal(true)}
-                    className="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-bold flex items-center justify-center gap-2"
-                  >
-                    <Trophy size={20} /> Declare Rummy
-                  </button>
-                )}
-              </div>
-            )}
 
             {/* End Session Button */}
             <div className="flex gap-3">
@@ -798,137 +571,86 @@ const GameSession = () => {
         )}
       </div>
 
-      {/* ==================== MODALS ==================== */}
-
-      {/* Teen Patti: Side Show Selection */}
-      {showSideShowSelection && (
+      {/* Add Points Modal */}
+      {showPointsModal && selectedPlayer && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="bg-slate-800 p-6 rounded-2xl max-w-sm w-full border border-slate-700">
-            <h3 className="text-xl font-bold text-slate-50 mb-4 flex items-center gap-2">
-              <ShieldAlert className="text-blue-400" /> Side Show
+            <h3 className="text-xl font-bold text-slate-50 mb-4">
+              Add Points to {selectedPlayer.name}
             </h3>
-            <div className="space-y-2 mb-6 max-h-60 overflow-y-auto">
-              {seenPlayers.map(p => (
+            
+            <input
+              type="number"
+              value={pointsInput}
+              onChange={(e) => setPointsInput(e.target.value)}
+              placeholder="Enter points"
+              className="w-full bg-slate-700 border border-slate-600 rounded-xl px-4 py-3 text-white text-lg text-center mb-4"
+              autoFocus
+            />
+
+            {/* Quick point buttons */}
+            <div className="grid grid-cols-4 gap-2 mb-4">
+              {[5, 10, 20, 50].map(pts => (
                 <button
-                  key={p.id}
-                  onClick={() => handleSideShowSelect(p.id)}
-                  className="w-full p-3 bg-slate-700 hover:bg-blue-900/30 border border-slate-600 rounded-xl text-left flex justify-between items-center"
+                  key={pts}
+                  onClick={() => setPointsInput(pts.toString())}
+                  className="py-2 bg-slate-700 text-slate-300 rounded-lg text-sm font-medium hover:bg-slate-600"
                 >
-                  <span className="font-bold text-slate-50">{p.name}</span>
-                  <span className="text-xs bg-blue-900 text-blue-300 px-2 py-1 rounded">SEEN</span>
+                  +{pts}
                 </button>
               ))}
             </div>
-            <button onClick={() => setShowSideShowSelection(false)} className="w-full py-3 bg-slate-700 text-slate-300 rounded-xl font-bold">Cancel</button>
+
+            <div className="flex gap-3">
+              <button 
+                onClick={() => { setShowPointsModal(false); setSelectedPlayer(null); }}
+                className="flex-1 py-3 bg-slate-700 text-slate-300 rounded-xl font-bold"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleAddPoints}
+                className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold flex items-center justify-center gap-2"
+              >
+                <Check size={18} /> Add
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Teen Patti: Side Show Resolve */}
-      {sideShowRequest && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
-          <div className="bg-slate-800 p-8 rounded-2xl max-w-md w-full border border-slate-700">
-            <div className="text-center mb-6">
-              <ShieldAlert className="mx-auto text-blue-400 mb-2" size={48} />
-              <h3 className="text-2xl font-black text-slate-50">Side Show</h3>
-            </div>
-            <div className="space-y-4 mb-6">
-              <button onClick={() => sendGameAction('SIDE_SHOW_RESOLVE', { winnerId: sideShowRequest.requester.id })} className="w-full p-4 rounded-xl border-2 border-blue-500/30 bg-blue-900/20">
-                <div className="flex justify-between"><span className="font-bold text-slate-50">{sideShowRequest.requester.name}</span><span className="text-xs bg-blue-500/30 text-blue-300 px-2 py-1 rounded">Requester</span></div>
-              </button>
-              <div className="text-center text-slate-400 font-bold">VS</div>
-              <button onClick={() => sendGameAction('SIDE_SHOW_RESOLVE', { winnerId: sideShowRequest.target.id })} className="w-full p-4 rounded-xl border-2 border-purple-500/30 bg-purple-900/20">
-                <div className="flex justify-between"><span className="font-bold text-slate-50">{sideShowRequest.target.name}</span><span className="text-xs bg-purple-500/30 text-purple-300 px-2 py-1 rounded">Target</span></div>
-              </button>
-            </div>
-            <button onClick={() => sendGameAction('CANCEL_SIDE_SHOW')} className="w-full py-3 bg-slate-700 text-slate-300 rounded-xl font-bold flex items-center justify-center gap-2"><X size={18} /> Cancel</button>
-          </div>
-        </div>
-      )}
-
-      {/* Teen Patti: Show Resolve */}
-      {showRequest && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
-          <div className="bg-slate-800 p-8 rounded-2xl max-w-md w-full border border-slate-700">
-            <div className="text-center mb-6">
-              <Trophy className="mx-auto text-yellow-500 mb-2" size={48} />
-              <h3 className="text-2xl font-black text-slate-50">{showRequest.isForceShow ? 'Force Show' : 'Show'}</h3>
-            </div>
-            <div className="space-y-4 mb-6">
-              <button onClick={() => sendGameAction('SHOW_RESOLVE', { winnerId: showRequest.requester.id })} className="w-full p-4 rounded-xl border-2 border-blue-500/30 bg-blue-900/20">
-                <div className="flex justify-between"><span className="font-bold text-slate-50">{showRequest.requester.name}</span><span className={`text-xs px-2 py-1 rounded ${showRequest.requester.status === 'SEEN' ? 'bg-blue-500/30 text-blue-300' : 'bg-slate-600'}`}>{showRequest.requester.status}</span></div>
-              </button>
-              <div className="text-center text-slate-400 font-bold">VS</div>
-              <button onClick={() => sendGameAction('SHOW_RESOLVE', { winnerId: showRequest.target.id })} className="w-full p-4 rounded-xl border-2 border-purple-500/30 bg-purple-900/20">
-                <div className="flex justify-between"><span className="font-bold text-slate-50">{showRequest.target.name}</span><span className={`text-xs px-2 py-1 rounded ${showRequest.target.status === 'SEEN' ? 'bg-blue-500/30 text-blue-300' : 'bg-slate-600'}`}>{showRequest.target.status}</span></div>
-              </button>
-            </div>
-            <button onClick={() => sendGameAction('CANCEL_SHOW')} className="w-full py-3 bg-slate-700 text-slate-300 rounded-xl font-bold flex items-center justify-center gap-2"><X size={18} /> Cancel</button>
-          </div>
-        </div>
-      )}
-
-      {/* Rummy: Declare Rummy Modal */}
-      {showDeclareModal && (
+      {/* Record Winner Modal */}
+      {showWinnerModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="bg-slate-800 p-6 rounded-2xl max-w-sm w-full border border-slate-700">
             <h3 className="text-xl font-bold text-slate-50 mb-4 flex items-center gap-2">
-              <Trophy className="text-yellow-400" /> Declare Rummy
+              <Trophy className="text-yellow-400" /> Record Winner
             </h3>
-            <p className="text-slate-400 text-sm mb-6">
-              Are you sure you want to declare Rummy? Make sure you have valid combinations.
+            <p className="text-slate-400 text-sm mb-4">
+              Select who won this round:
             </p>
-            <div className="flex gap-3">
-              <button onClick={() => setShowDeclareModal(false)} className="flex-1 py-3 bg-slate-700 text-slate-300 rounded-xl font-bold">Cancel</button>
-              <button onClick={handleDeclareRummy} className="flex-1 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-bold">Declare!</button>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* Rummy: Resolve Declare Modal */}
-      {showResolveDeclareModal && gameState?.declaredPlayer && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
-          <div className="bg-slate-800 p-8 rounded-2xl max-w-md w-full border border-slate-700">
-            <div className="text-center mb-6">
-              <Trophy className={`mx-auto mb-2 ${gameState.declaredValid ? 'text-green-500' : 'text-red-500'}`} size={48} />
-              <h3 className="text-2xl font-black text-slate-50">
-                {gameState.declaredValid ? 'Valid Declaration!' : 'Invalid Declaration'}
-              </h3>
-              <p className="text-slate-400 mt-2">
-                {gameState.declaredPlayer.name} {gameState.declaredValid ? 'wins!' : 'gets penalty!'}
-              </p>
-            </div>
-            
-            {gameState.declaredValid ? (
-              <div className="space-y-4 mb-6">
-                <p className="text-slate-400 text-sm text-center">Select the winner:</p>
-                {gamePlayers.filter(p => p.id !== gameState.declaredPlayer.id).map(p => (
-                  <button 
-                    key={p.id}
-                    onClick={() => handleResolveDeclare(p.id)}
-                    className="w-full p-4 rounded-xl border-2 border-green-500/30 bg-green-900/20 hover:bg-green-900/40"
-                  >
-                    <div className="flex justify-between items-center">
-                      <span className="font-bold text-slate-50">{p.name}</span>
-                      <span className="text-xs bg-green-500/30 text-green-300 px-2 py-1 rounded">{p.score} pts</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="mb-6">
-                <p className="text-slate-400 text-sm text-center mb-4">Penalty will be applied to {gameState.declaredPlayer.name}</p>
-                <button 
-                  onClick={() => handleResolveDeclare(gameState.declaredPlayer.id)}
-                  className="w-full py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-bold"
+            <div className="space-y-2 mb-6 max-h-60 overflow-y-auto">
+              {activePlayers.map(player => (
+                <button
+                  key={player.id}
+                  onClick={() => handleRecordWinner(player.id)}
+                  className="w-full p-4 bg-slate-700 hover:bg-green-900/30 border border-slate-600 hover:border-green-500 rounded-xl text-left flex justify-between items-center transition-all"
                 >
-                  Apply Penalty (80 pts)
+                  <span className="font-bold text-slate-50">{player.name}</span>
+                  <span className="text-sm text-slate-400">
+                    {player.score || player.sessionBalance || 0} pts
+                  </span>
                 </button>
-              </div>
-            )}
-            
-            <button onClick={() => setShowResolveDeclareModal(false)} className="w-full py-3 bg-slate-700 text-slate-300 rounded-xl font-bold">Cancel</button>
+              ))}
+            </div>
+
+            <button 
+              onClick={() => setShowWinnerModal(false)}
+              className="w-full py-3 bg-slate-700 text-slate-300 rounded-xl font-bold"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}
@@ -940,7 +662,7 @@ const GameSession = () => {
             <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-yellow-400 to-yellow-600"></div>
             <Trophy className="mx-auto text-yellow-500 mb-4" size={64} />
             <h2 className="text-3xl font-black text-slate-50 mb-1 uppercase">
-              {isRummy ? 'Round Complete!' : 'Winner!'}
+              Round Complete!
             </h2>
             <p className="text-2xl font-bold text-blue-400 mb-6">{roundSummaryData.winner?.name}</p>
 
@@ -951,27 +673,19 @@ const GameSession = () => {
               </p>
             </div>
 
-            {roundSummaryData.netChanges && Object.keys(roundSummaryData.netChanges).length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-3">
-                  {isRummy ? 'Points' : 'Net Changes'}
-                </h3>
-                <div className="space-y-2">
-                  {Object.entries(roundSummaryData.netChanges).map(([playerId, change]) => {
-                    const player = players.find(p => p.id === parseInt(playerId));
-                    if (!player) return null;
-                    return (
-                      <div key={playerId} className="flex justify-between items-center bg-slate-700/50 p-3 rounded-xl">
-                        <span className="font-bold text-slate-50">{player.name}</span>
-                        <span className={`font-bold ${change >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-                          {isRummy ? (change > 0 ? `+${change}` : change) : (change >= 0 ? '+' : '') + change} {isRummy && 'pts'}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
+            <div className="mb-6">
+              <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-3">Current Scores</h3>
+              <div className="space-y-2">
+                {(gameState?.players || players).map(p => (
+                  <div key={p.id} className="flex justify-between items-center bg-slate-700/50 p-3 rounded-xl">
+                    <span className="font-bold text-slate-50">{p.name}</span>
+                    <span className={`font-bold ${p.status === 'ELIMINATED' ? 'text-red-400' : 'text-green-400'}`}>
+                      {p.score || p.sessionBalance || 0} {p.status === 'ELIMINATED' ? '(ELIMINATED)' : 'pts'}
+                    </span>
+                  </div>
+                ))}
               </div>
-            )}
+            </div>
 
             {roundSummaryData.eliminated && roundSummaryData.eliminated.length > 0 && (
               <div className="mb-6 bg-red-900/20 rounded-xl p-4 border border-red-500/30">
