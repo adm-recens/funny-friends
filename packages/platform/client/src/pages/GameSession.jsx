@@ -200,10 +200,14 @@ const GameSession = () => {
   };
 
   const handleNextRound = () => {
+    // Check if session is over BEFORE clearing state
+    const isSessionOver = roundSummaryData?.isSessionOver;
+    
     setShowRoundSummary(false);
     setRoundSummaryData(null);
     
-    if (roundSummaryData?.isSessionOver) {
+    if (isSessionOver) {
+      // Navigate back to sessions list
       navigate('/operator/sessions');
     } else {
       sendGameAction('START_GAME');

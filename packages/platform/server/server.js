@@ -2206,7 +2206,14 @@ io.on('connection', (socket) => {
               console.log(`Initialized GameManager for ${sessionName}`);
               return newManager;
             } else {
-              return null;
+              // Session exists but is inactive (ended) - return session info for display
+              console.log(`[DEBUG] Session ${sessionName} is ended, returning final state`);
+              return { 
+                isEnded: true, 
+                finalRound: dbSession.currentRound,
+                totalRounds: dbSession.totalRounds,
+                finalPlayers: initialPlayers
+              };
             }
           } catch (e) {
             console.error("Restore Error:", e);
@@ -2221,7 +2228,16 @@ io.on('connection', (socket) => {
         try {
           manager = await loadPromise;
           if (!manager) {
-            return socket.emit('session_ended', { reason: "Session not found or inactive" });
+            return socket.emit('error_message', "Session not found or inactive");
+          }
+          // Check if it's an ended session info object
+          if (manager.isEnded) {
+            return socket.emit('session_ended', { 
+              reason: 'SESSION_COMPLETE',
+              finalRound: manager.finalRound,
+              totalRounds: manager.totalRounds,
+              finalPlayers: manager.finalPlayers
+            });
           }
         } catch (e) {
           return socket.emit('error_message', "Internal server error during session load");
