@@ -2257,6 +2257,13 @@ io.on('connection', (socket) => {
 
   // Game Actions
   socket.on('game_action', (action) => {
+    // Validate action object
+    if (!action || typeof action !== 'object') {
+      console.log('[DEBUG] Invalid action received:', action);
+      socket.emit('error_message', 'Invalid action format');
+      return;
+    }
+    
     console.log('[DEBUG] game_action received:', action.type, 'for session:', action.sessionName);
     if (!isOperatorOrAdmin()) {
       console.log('[DEBUG] Unauthorized - user role:', socket.user.role);

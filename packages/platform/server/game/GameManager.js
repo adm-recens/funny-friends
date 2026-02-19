@@ -151,9 +151,15 @@ class GameManager extends EventEmitter {
   }
 
   processAction(socketId, action) {
-    console.log(`[GameManager] Action received: ${action.type}`);
+    console.log(`[GameManager] Action received: ${action?.type}`);
     // Stub - just return current state
-    return this.getPublicState();
+    return { success: true, ...this.getPublicState() };
+  }
+
+  handleAction(action) {
+    console.log(`[GameManager] handleAction called: ${action?.type}`);
+    // Stub - just return current state
+    return { success: true, ...this.getPublicState() };
   }
 
   endSession() {
