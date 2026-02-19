@@ -2663,32 +2663,76 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3000;
-const httpServer = server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log("NODE_ENV:", process.env.NODE_ENV);
-});
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received, shutting down gracefully');
-  httpServer.close(() => {
-    console.log('Server closed');
-    prisma.$disconnect().then(() => {
-      console.log('Database disconnected');
-      process.exit(0);
+// Initialize database before starting server
+async function initializeDatabase() {
+  try {
+    console.log('[INFO] Checking database initialization...');
+    
+    // Check if we can connect to the database
+    await prisma.$connect();
+    console.log('[INFO] Database connection successful');
+    
+    // Try to query the database to see if tables exist
+    try {
+      await prisma.$queryRaw`SELECT 1 FROM "User" LIMIT 1`;
+      console.log('[INFO] Database tables already exist');
+    } catch (e) {
+      if (e.code === 'P2021' || e.message.includes('does not exist')) {
+        console.log('[INFO] Database tables not found. Running db push...');
+        const { execSync } = require('child_process');
+        execSync('npx prisma db push --accept-data-loss', {
+          cwd: __dirname,
+          stdio: 'inherit'
+        });
+        console.log('[INFO] Database schema pushed successfully');
+        
+        // Seed the database
+        console.log('[INFO] Seeding database...');
+        const seedScript = require('./scripts/seed-games.js');
+        console.log('[INFO] Database seeded successfully');
+      } else {
+        throw e;
+      }
+    }
+  } catch (error) {
+    console.error('[ERROR] Database initialization failed:', error.message);
+    console.error('[ERROR] Server will start but may not function properly');
+  }
+}
+
+// Start server after database initialization
+initializeDatabase().then(() => {
+  const httpServer = server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    console.log("NODE_ENV:", process.env.NODE_ENV);
+  });
+
+  // Graceful shutdown
+  process.on('SIGTERM', () => {
+    console.log('SIGTERM received, shutting down gracefully');
+    httpServer.close(() => {
+      console.log('Server closed');
+      prisma.$disconnect().then(() => {
+        console.log('Database disconnected');
+        process.exit(0);
+      });
     });
   });
-});
 
-process.on('SIGINT', () => {
-  console.log('SIGINT received, shutting down gracefully');
-  httpServer.close(() => {
-    console.log('Server closed');
-    prisma.$disconnect().then(() => {
-      console.log('Database disconnected');
-      process.exit(0);
+  process.on('SIGINT', () => {
+    console.log('SIGINT received, shutting down gracefully');
+    httpServer.close(() => {
+      console.log('Server closed');
+      prisma.$disconnect().then(() => {
+        console.log('Database disconnected');
+        process.exit(0);
+      });
     });
   });
+}).catch(err => {
+  console.error('[ERROR] Failed to start server:', err);
+  process.exit(1);
 });
 
 // Export app instance and other components for use in other modules
