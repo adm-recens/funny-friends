@@ -751,14 +751,25 @@ app.post('/api/auth/login', authLimiter, asyncHandler(async (req, res) => {
   // Clear username rate limit on success
   usernameAttempts.delete(username);
 
+  // Fetch user permissions
+  const permissions = await prisma.userGamePermission.findMany({
+    where: { userId: user.id },
+    include: { gameType: true }
+  });
+
   return ApiResponse.success(res, {
     user: {
       id: user.id,
       username: user.username,
-      role: user.role
+      role: user.role,
+      permissions: permissions.map(p => ({
+        gameType: p.gameType.code,
+        canCreate: p.canCreate,
+        canManage: p.canManage
+      }))
     },
     csrfToken
-  });
+  }));
 }));
 
 // 1.5 CHECK SESSION API - Optimized with single query
@@ -791,11 +802,22 @@ app.get('/api/auth/me', asyncHandler(async (req, res) => {
     return res.json({ user: null });
   }
 
+  // Fetch user permissions
+  const permissions = await prisma.userGamePermission.findMany({
+    where: { userId: sessionWithUser.user.id },
+    include: { gameType: true }
+  });
+
   return ApiResponse.success(res, {
     user: {
       id: sessionWithUser.user.id,
       role: sessionWithUser.user.role,
-      username: sessionWithUser.user.username
+      username: sessionWithUser.user.username,
+      permissions: permissions.map(p => ({
+        gameType: p.gameType.code,
+        canCreate: p.canCreate,
+        canManage: p.canManage
+      }))
     }
   });
 }));
@@ -2033,6 +2055,47 @@ async function initializeGameManager(sessionName) {
         }
         
         io.to(sessionName).emit('game_update', { type: 'HAND_COMPLETE', ...summary });
+      });
+      
+      // Rummy uses round_complete instead of hand_complete
+      newManager.on('round_complete', async (summary) => {
+        try {
+          const session = await prisma.gameSession.findUnique({ where: { name: sessionName } });
+          if (session) {
+            await prisma.gameHand.create({
+              data: {
+                winner: summary.winner?.name || 'N/A',
+                potSize: 0,
+                logs: JSON.stringify(summary.leaderboard || []),
+                sessionId: session.id
+              }
+            });
+            
+            // Update player scores
+            if (summary.leaderboard) {
+              for (const player of summary.leaderboard) {
+                await prisma.player.updateMany({
+                  where: { 
+                    sessionId: session.id,
+                    name: player.name
+                  },
+                  data: { 
+                    sessionBalance: player.totalScore 
+                  }
+                });
+              }
+            }
+            
+            await prisma.gameSession.update({
+              where: { id: session.id },
+              data: { currentRound: summary.round }
+            });
+          }
+        } catch (e) {
+          console.error('[ERROR] Failed to save round persistence:', e);
+        }
+        
+        io.to(sessionName).emit('game_update', { type: 'ROUND_COMPLETE', ...summary });
       });
       
       newManager.on('session_ended', async (data) => {

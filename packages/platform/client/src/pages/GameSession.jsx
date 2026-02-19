@@ -125,6 +125,21 @@ const GameSession = () => {
         });
         setShowRoundSummary(true);
         if (state.players) setPlayers(state.players);
+      } else if (state.type === 'ROUND_COMPLETE') {
+        // Rummy round complete
+        setRoundSummaryData({
+          winner: state.winner,
+          leaderboard: state.leaderboard,
+          round: state.round,
+          isSessionOver: state.isSessionOver,
+          finalWinner: state.finalWinner,
+          eliminated: state.eliminated,
+          remainingPlayers: state.remainingPlayers
+        });
+        setShowRoundSummary(true);
+        if (state.leaderboard) {
+          setPlayers(state.leaderboard);
+        }
       } else if (state.type === 'SESSION_ENDED' || state.reason) {
         setSessionSummaryData(state);
         setShowSessionSummary(true);
