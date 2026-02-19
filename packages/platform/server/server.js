@@ -2399,14 +2399,44 @@ io.on('connection', (socket) => {
           socket.emit('error_message', result.error);
         }
       }
+    } else if (action.type === 'RECORD_INITIAL_DROP') {
+      // Rummy: Player drops before first draw = 20 points
+      if (manager.handleAction) {
+        const result = manager.handleAction(action);
+        if (!result.success) socket.emit('error_message', result.error);
+      }
+    } else if (action.type === 'RECORD_MIDDLE_DROP') {
+      // Rummy: Player drops after playing = 40 points
+      if (manager.handleAction) {
+        const result = manager.handleAction(action);
+        if (!result.success) socket.emit('error_message', result.error);
+      }
+    } else if (action.type === 'RECORD_VALID_SHOW') {
+      // Rummy: Valid rummy declaration = 0 points, round ends
+      if (manager.handleAction) {
+        const result = manager.handleAction(action);
+        if (!result.success) socket.emit('error_message', result.error);
+      }
+    } else if (action.type === 'RECORD_WRONG_SHOW') {
+      // Rummy: Wrong show = 80 points penalty, round ends
+      if (manager.handleAction) {
+        const result = manager.handleAction(action);
+        if (!result.success) socket.emit('error_message', result.error);
+      }
+    } else if (action.type === 'RECORD_CARD_POINTS') {
+      // Rummy: Record card points for player
+      if (manager.handleAction) {
+        const result = manager.handleAction(action);
+        if (!result.success) socket.emit('error_message', result.error);
+      }
     } else if (action.type === 'RECORD_POINTS') {
-      // Rummy: Record points for a player
+      // Legacy: Rummy record points
       if (manager.handleAction) {
         const result = manager.handleAction(action);
         if (!result.success) socket.emit('error_message', result.error);
       }
     } else if (action.type === 'RECORD_DROP') {
-      // Rummy: Record drop (initial=20pts, middle=40pts)
+      // Legacy: Rummy record drop
       if (manager.handleAction) {
         const result = manager.handleAction({
           type: 'RECORD_DROP',
@@ -2421,6 +2451,12 @@ io.on('connection', (socket) => {
         const result = manager.handleAction(action);
         if (!result.success) socket.emit('error_message', result.error);
       }
+    } else if (action.type === 'END_ROUND') {
+      // Rummy: End current round
+      if (manager.handleAction) {
+        const result = manager.handleAction(action);
+        if (!result.success) socket.emit('error_message', result.error);
+      }
     } else if (action.type === 'ELIMINATE_PLAYER') {
       // Rummy Ledger: Eliminate a player
       if (manager.handleAction) {
@@ -2429,6 +2465,12 @@ io.on('connection', (socket) => {
       }
     } else if (action.type === 'ADD_TO_POT') {
       // Teen Patti Ledger: Add to pot
+      if (manager.handleAction) {
+        const result = manager.handleAction(action);
+        if (!result.success) socket.emit('error_message', result.error);
+      }
+    } else if (action.type === 'RESET_ROUND') {
+      // Reset current round
       if (manager.handleAction) {
         const result = manager.handleAction(action);
         if (!result.success) socket.emit('error_message', result.error);
@@ -2473,6 +2515,10 @@ io.on('connection', (socket) => {
       if (manager) {
         finalRound = manager.currentRound;
         totalRounds = manager.totalRounds;
+        // Call endSession if available (for proper cleanup)
+        if (manager.endSession) {
+          manager.endSession();
+        }
         activeSessions.delete(sessionName);
       }
 
