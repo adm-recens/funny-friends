@@ -2285,9 +2285,8 @@ io.on('connection', (socket) => {
       if (!result.success) socket.emit('error_message', result.error);
     } else if (action.type === 'NEXT_ROUND') {
       console.log('[DEBUG] Moving to next round');
-      manager.currentRound++;
-      // Emit state update
-      manager.emit('state_change', manager.getPublicState());
+      const result = manager.startRound();
+      if (!result.success) socket.emit('error_message', result.error);
     } else if (action.type === 'END_SESSION') {
       console.log('[DEBUG] Ending session');
       manager.endSession();

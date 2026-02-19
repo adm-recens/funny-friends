@@ -8,7 +8,7 @@
   ],
   "scripts": {
     "dev": "npm run db:generate && turbo run dev",
-    "build": "npm run db:generate && npm run db:push && npm run db:seed && npm run build:client",
+    "build": "npm run build:client",
     "build:client": "cd packages/platform/client && npx vite@7.2.4 build",
     "start": "cd packages/platform/server && node server.js",
     "postinstall": "npm run db:generate",
