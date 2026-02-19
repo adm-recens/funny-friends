@@ -95,9 +95,9 @@ model Player {
   id             Int     @id @default(autoincrement())
   name           String
   sessionBalance Int     @default(0)  // For Teen Patti: pot winnings
-  score          Int?    // For Rummy: cumulative points (nullable for backward compat)
+  score          Int     @default(0)  // For Rummy: cumulative points
   seatPosition   Int?    // 1-based index for seating
-  status         String? @default("PLAYING") // PLAYING, ELIMINATED
+  status         String  @default("PLAYING") // PLAYING, ELIMINATED
   
   userId         Int?    @unique
   user           User?   @relation(fields: [userId], references: [id])
