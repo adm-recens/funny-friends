@@ -83,7 +83,7 @@ const AdminDashboardOverview = () => {
   const quickActions = [
     { label: 'Create New User', path: '/admin/users', color: 'bg-blue-500' },
     { label: 'Manage Permissions', path: '/admin/permissions', color: 'bg-purple-500' },
-    { label: 'View All Sessions', path: '/admin/games', color: 'bg-green-500' },
+    { label: 'View All Sessions', path: '/admin/sessions', color: 'bg-green-500' },
     { label: 'Platform Settings', path: '/admin/settings', color: 'bg-orange-500' }
   ];
 

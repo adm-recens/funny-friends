@@ -20,6 +20,7 @@ import AdminDashboardOverview from './pages/admin/AdminDashboardOverview';
 import UserManagement from './pages/admin/UserManagement';
 import PermissionsManagement from './pages/admin/PermissionsManagement';
 import PlatformSettings from './pages/admin/PlatformSettings';
+import AdminSessions from './pages/admin/AdminSessions';
 
 // Operator Control Panel
 import OperatorControlPanel from './pages/operator/OperatorControlPanel';
@@ -110,7 +111,8 @@ const AppRoutes = () => {
         <Route path="dashboard" element={<AdminDashboardOverview />} />
         <Route path="users" element={<UserManagement />} />
         <Route path="permissions" element={<PermissionsManagement />} />
-        <Route path="games" element={<AdminDashboardOverview />} />
+        <Route path="games" element={<AdminSessions />} />
+        <Route path="sessions" element={<AdminSessions />} />
         <Route path="settings" element={<PlatformSettings />} />
         <Route path="monitoring" element={<AdminDashboardOverview />} />
       </Route>
