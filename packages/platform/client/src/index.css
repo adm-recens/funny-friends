@@ -112,3 +112,203 @@
     }
   }
 }
+
+@layer components {
+  /* Card/Panel Styles */
+  .card {
+    @apply bg-slate-800 rounded-xl border border-slate-700;
+  }
+
+  .card-header {
+    @apply p-4 sm:p-6 border-b border-slate-700;
+  }
+
+  .card-body {
+    @apply p-4 sm:p-6;
+  }
+
+  .card-footer {
+    @apply p-4 sm:p-6 border-t border-slate-700;
+  }
+
+  /* Button Styles */
+  .btn {
+    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200;
+  }
+
+  .btn-primary {
+    @apply bg-violet-600 hover:bg-violet-700 text-white;
+  }
+
+  .btn-secondary {
+    @apply bg-slate-700 hover:bg-slate-600 text-slate-100;
+  }
+
+  .btn-success {
+    @apply bg-green-600 hover:bg-green-700 text-white;
+  }
+
+  .btn-danger {
+    @apply bg-red-600 hover:bg-red-700 text-white;
+  }
+
+  .btn-warning {
+    @apply bg-yellow-600 hover:bg-yellow-700 text-white;
+  }
+
+  .btn-ghost {
+    @apply text-slate-400 hover:text-slate-100 hover:bg-slate-800;
+  }
+
+  .btn-outline {
+    @apply border-2 border-slate-600 hover:border-slate-500 text-slate-300 hover:text-slate-100;
+  }
+
+  .btn-sm {
+    @apply px-3 py-1.5 text-sm;
+  }
+
+  .btn-lg {
+    @apply px-6 py-3 text-base;
+  }
+
+  /* Input Styles */
+  .input {
+    @apply w-full px-4 py-2.5 bg-slate-700 border border-slate-600 rounded-lg text-slate-50 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all;
+  }
+
+  .input-sm {
+    @apply px-3 py-2 text-sm;
+  }
+
+  .input-lg {
+    @apply px-4 py-3 text-base;
+  }
+
+  /* Form Group */
+  .form-group {
+    @apply space-y-2;
+  }
+
+  .form-label {
+    @apply block text-sm font-medium text-slate-300;
+  }
+
+  .form-error {
+    @apply text-sm text-red-400;
+  }
+
+  /* Badge Styles */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-primary {
+    @apply bg-violet-500/20 text-violet-300;
+  }
+
+  .badge-success {
+    @apply bg-green-500/20 text-green-300;
+  }
+
+  .badge-warning {
+    @apply bg-yellow-500/20 text-yellow-300;
+  }
+
+  .badge-danger {
+    @apply bg-red-500/20 text-red-300;
+  }
+
+  .badge-info {
+    @apply bg-blue-500/20 text-blue-300;
+  }
+
+  /* Container */
+  .container-app {
+    @apply min-h-screen bg-slate-900;
+  }
+
+  .container-content {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8;
+  }
+
+  /* Page Header */
+  .page-header {
+    @apply border-b border-slate-800;
+  }
+
+  .page-header-content {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4;
+  }
+
+  .page-title {
+    @apply text-lg sm:text-2xl font-bold text-slate-50;
+  }
+
+  .page-subtitle {
+    @apply text-slate-400 text-xs sm:text-sm;
+  }
+
+  /* Alert Styles */
+  .alert {
+    @apply flex items-center gap-3 p-3 sm:p-4 rounded-xl;
+  }
+
+  .alert-error {
+    @apply bg-red-500/10 border border-red-500/20 text-red-400;
+  }
+
+  .alert-success {
+    @apply bg-green-500/10 border border-green-500/20 text-green-400;
+  }
+
+  .alert-warning {
+    @apply bg-yellow-500/10 border border-yellow-500/20 text-yellow-400;
+  }
+
+  .alert-info {
+    @apply bg-blue-500/10 border border-blue-500/20 text-blue-400;
+  }
+
+  /* Table Styles */
+  .table-container {
+    @apply overflow-x-auto rounded-xl border border-slate-700;
+  }
+
+  .table {
+    @apply w-full text-sm text-left;
+  }
+
+  .table-header {
+    @apply bg-slate-800 text-slate-400 text-xs uppercase;
+  }
+
+  .table-row {
+    @apply border-b border-slate-700 hover:bg-slate-800/50 transition-colors;
+  }
+
+  .table-cell {
+    @apply px-4 py-3;
+  }
+
+  /* Modal/Dialog */
+  .modal-overlay {
+    @apply fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4;
+  }
+
+  .modal-content {
+    @apply bg-slate-800 rounded-2xl border border-slate-700 shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto;
+  }
+
+  .modal-header {
+    @apply flex items-center justify-between p-4 sm:p-6 border-b border-slate-700;
+  }
+
+  .modal-body {
+    @apply p-4 sm:p-6;
+  }
+
+  .modal-footer {
+    @apply flex justify-end gap-3 p-4 sm:p-6 border-t border-slate-700;
+  }
+}
