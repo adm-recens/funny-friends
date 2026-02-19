@@ -22,7 +22,7 @@ services:
     runtime: node
     region: oregon
     plan: free
-    buildCommand: npm install && npm run db:generate && npm run build:client
+    buildCommand: npm install && npm run db:generate && npm run db:push && npm run build:client
     preDeployCommand: npm run db:push
     startCommand: npm start
     envVars:
