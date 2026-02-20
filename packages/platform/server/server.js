@@ -791,7 +791,7 @@ app.post('/api/auth/login', authLimiter, asyncHandler(async (req, res) => {
       }))
     },
     csrfToken
-  }));
+  });
 }));
 
 // 1.5 CHECK SESSION API - Optimized with single query
