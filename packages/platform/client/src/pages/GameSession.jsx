@@ -521,9 +521,17 @@ const GameSession = () => {
               {isRummy && currentPhase !== 'SETUP' && isOperatorOrAdmin && (
                 <button
                   onClick={handleEndRound}
-                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg flex items-center gap-1"
+                  className={`px-3 py-1.5 text-white text-sm font-bold rounded-lg flex items-center gap-1 ${
+                    gameState?.roundCompletionPhase && gameState?.playersNeedingPoints === 0
+                      ? 'bg-green-600 hover:bg-green-700 animate-pulse'
+                      : 'bg-blue-600 hover:bg-blue-700'
+                  }`}
                 >
-                  <Trophy size={14} /> End Round
+                  <Trophy size={14} /> 
+                  {gameState?.roundCompletionPhase 
+                    ? `End Round ${gameState?.playersNeedingPoints > 0 ? `(${gameState.playersNeedingPoints} pending)` : '✓'}`
+                    : 'End Round'
+                  }
                 </button>
               )}
               {isRummy ? (
@@ -553,7 +561,29 @@ const GameSession = () => {
             <span className="animate-pulse">●</span>
             <span className="font-bold">Current Turn:</span>
             <span className="text-xl font-black">{activePlayer.name}</span>
-            <span className="text-sm opacity-80">({activePlayer.status})</span>
+            <span className="text-sm opacity-80">({currentPhase})</span>
+          </div>
+        </div>
+      )}
+      
+      {/* Rummy Round Completion Phase Banner */}
+      {isRummy && gameState?.roundCompletionPhase && (
+        <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-4 py-3 text-center shadow-lg relative z-10">
+          <div className="flex flex-col items-center justify-center gap-1">
+            <div className="flex items-center gap-2">
+              <span className="animate-pulse">●</span>
+              <span className="font-bold text-lg">Round Completion Phase</span>
+            </div>
+            {gameState.playersNeedingPoints > 0 && (
+              <div className="text-sm">
+                Waiting for {gameState.playersNeedingPoints} player{gameState.playersNeedingPoints !== 1 ? 's' : ''} to add points
+              </div>
+            )}
+            {gameState.playersNeedingPoints === 0 && (
+              <div className="text-sm font-bold text-green-300">
+                All points recorded! Click "End Round" to finish
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -718,7 +748,7 @@ const GameSession = () => {
                       {/* Rummy Quick Actions - Set Points */}
                       {isOperatorOrAdmin && !isEliminated && currentPhase !== 'SETUP' && (
                         <div className="mt-3">
-                          <div className="text-xs text-slate-400 mb-2 uppercase tracking-wider font-bold">Quick Set Points</div>
+                          <div className="text-xs text-slate-400 mb-2 uppercase tracking-wider font-bold">Actions</div>
                           <div className="grid grid-cols-4 gap-1">
                             <button
                               onClick={() => setPredefinedPoints(20)}
@@ -743,26 +773,26 @@ const GameSession = () => {
                               <div className="text-[8px] opacity-80">40</div>
                             </button>
                             <button
-                              onClick={() => setPredefinedPoints(0)}
-                              className={`py-1.5 px-1 text-[10px] font-bold rounded ${
-                                currentPoints === '0' 
-                                  ? 'bg-green-600 text-white ring-2 ring-green-400' 
-                                  : 'bg-green-600/30 text-green-400 hover:bg-green-600/50'
-                              }`}
+                              onClick={() => {
+                                // Rummy declaration ends round
+                                sendGameAction('RECORD_VALID_SHOW', { playerId: p.id });
+                                toast.success(`${p.name} declares RUMMY! Round enters completion phase.`);
+                              }}
+                              className="py-1.5 px-1 text-[10px] font-bold rounded bg-green-600/80 text-white hover:bg-green-600"
                             >
-                              Valid
-                              <div className="text-[8px] opacity-80">0</div>
+                              Rummy
+                              <div className="text-[8px] opacity-80">0 pts</div>
                             </button>
                             <button
-                              onClick={() => setPredefinedPoints(80)}
-                              className={`py-1.5 px-1 text-[10px] font-bold rounded ${
-                                currentPoints === '80' 
-                                  ? 'bg-red-600 text-white ring-2 ring-red-400' 
-                                  : 'bg-red-600/30 text-red-400 hover:bg-red-600/50'
-                              }`}
+                              onClick={() => {
+                                // Wrong show ends round
+                                sendGameAction('RECORD_WRONG_SHOW', { playerId: p.id });
+                                toast.error(`${p.name} - Wrong Show! 80 point penalty. Round enters completion phase.`);
+                              }}
+                              className="py-1.5 px-1 text-[10px] font-bold rounded bg-red-600/80 text-white hover:bg-red-600"
                             >
                               Wrong
-                              <div className="text-[8px] opacity-80">80</div>
+                              <div className="text-[8px] opacity-80">80 pts</div>
                             </button>
                           </div>
                         </div>
