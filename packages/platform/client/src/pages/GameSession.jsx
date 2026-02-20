@@ -664,7 +664,7 @@ const GameSession = () => {
         {currentPhase !== 'SETUP' && (
           <div className="space-y-6">
 
-            {/* Players Grid -->
+            {/* Players Grid */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {gamePlayers.map((p, idx) => {
                 const isActive = idx === gameState?.activePlayerIndex;
