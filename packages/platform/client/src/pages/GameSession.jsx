@@ -141,8 +141,23 @@ const GameSession = () => {
           setPlayers(state.leaderboard);
         }
       } else if (state.type === 'SESSION_ENDED' || state.reason) {
+        // Session ended - show summary modal but also load the final game state
         setSessionSummaryData(state);
         setShowSessionSummary(true);
+        
+        // Also set the game state so user can see final standings
+        if (state.finalPlayers) {
+          setPlayers(state.finalPlayers);
+          setGamePlayers(state.finalPlayers);
+        }
+        setGameState({
+          phase: 'ENDED',
+          currentRound: state.finalRound,
+          totalRounds: state.totalRounds,
+          players: state.finalPlayers || [],
+          ...state
+        });
+        setSessionStatus('ended');
       } else {
         setGameState(state);
         if (state.players && state.players.length > 0) {
@@ -1120,21 +1135,62 @@ const GameSession = () => {
       {/* Session Ended Modal */}
       {showSessionSummary && sessionSummaryData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
-          <div className="bg-slate-800 p-8 rounded-2xl max-w-md w-full text-center border border-slate-700">
-            <Trophy className="mx-auto text-yellow-500 mb-4" size={64} />
-            <h2 className="text-3xl font-black text-slate-50 mb-4">Game Complete!</h2>
+          <div className="bg-slate-800 p-6 rounded-2xl max-w-lg w-full border border-slate-700 max-h-[90vh] overflow-y-auto">
+            <div className="text-center mb-6">
+              <Trophy className="mx-auto text-yellow-500 mb-4" size={64} />
+              <h2 className="text-3xl font-black text-slate-50 mb-2">Game Complete!</h2>
+              <p className="text-slate-400">Session: {decodeURIComponent(sessionName)}</p>
+            </div>
+            
             <div className="bg-slate-700/50 rounded-xl p-4 mb-6">
-              <p className="text-slate-400 text-sm">Final Round</p>
-              <p className="text-2xl font-black text-slate-50">
+              <p className="text-slate-400 text-sm text-center">Final Round</p>
+              <p className="text-2xl font-black text-slate-50 text-center">
                 {sessionSummaryData.finalRound} / {sessionSummaryData.totalRounds}
               </p>
             </div>
-            <button 
-              onClick={() => navigate('/operator/sessions')} 
-              className="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-bold text-lg"
-            >
-              Back to Sessions
-            </button>
+
+            {/* Final Standings */}
+            {sessionSummaryData.finalPlayers && sessionSummaryData.finalPlayers.length > 0 && (
+              <div className="mb-6">
+                <h3 className="text-lg font-bold text-slate-300 mb-3 text-center">Final Standings</h3>
+                <div className="space-y-2">
+                  {sessionSummaryData.finalPlayers
+                    .sort((a, b) => (a.score || 0) - (b.score || 0))
+                    .map((player, index) => (
+                    <div 
+                      key={player.id} 
+                      className={`flex justify-between items-center p-3 rounded-xl ${
+                        index === 0 ? 'bg-yellow-500/20 border border-yellow-500/30' : 'bg-slate-700/50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className={`text-lg font-bold ${
+                          index === 0 ? 'text-yellow-400' : 'text-slate-400'
+                        }`}>#{index + 1}</span>
+                        <span className="font-bold text-slate-50">{player.name}</span>
+                        {index === 0 && <span className="text-xs bg-yellow-500/30 text-yellow-400 px-2 py-0.5 rounded">WINNER</span>}
+                      </div>
+                      <span className="font-bold text-white">{player.score || player.sessionBalance || 0} pts</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setShowSessionSummary(false)} 
+                className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold"
+              >
+                View Game Details
+              </button>
+              <button 
+                onClick={() => navigate('/operator/sessions')} 
+                className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-bold"
+              >
+                Back to Sessions
+              </button>
+            </div>
           </div>
         </div>
       )}
