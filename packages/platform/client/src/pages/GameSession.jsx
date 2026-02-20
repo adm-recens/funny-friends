@@ -605,18 +605,6 @@ const GameSession = () => {
         </div>
       )}
 
-      {/* Rummy Turn Banner */}
-      {isRummy && currentPhase !== 'SETUP' && activePlayer && (
-        <div className="bg-gradient-to-r from-orange-600 to-amber-600 text-white px-4 py-2 text-center shadow-lg relative z-10">
-          <div className="flex items-center justify-center gap-2">
-            <span className="animate-pulse">●</span>
-            <span className="font-bold">Current Turn:</span>
-            <span className="text-xl font-black">{activePlayer.name}</span>
-            <span className="text-sm opacity-80">({currentPhase})</span>
-          </div>
-        </div>
-      )}
-
       {/* Content */}
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         
@@ -742,13 +730,13 @@ const GameSession = () => {
                   return (
                     <div 
                       key={p.id || idx} 
-                      className={`relative p-4 rounded-2xl border-2 transition-all ${
-                        isActive ? 'border-orange-500 bg-slate-800 shadow-[0_0_30px_rgba(234,88,12,0.3)]' : 'border-slate-700 bg-slate-800/50'
-                      } ${isEliminated ? 'opacity-50 grayscale' : ''}`}
+                      className={`relative p-4 rounded-2xl border-2 border-slate-700 bg-slate-800/50 transition-all ${
+                        isEliminated ? 'opacity-50 grayscale' : ''
+                      }`}
                     >
                       <div className="flex justify-between items-start mb-2">
                         <div className="flex flex-col">
-                          <span className={`font-bold text-lg ${isActive ? 'text-white' : 'text-slate-400'}`}>{p.name}</span>
+                          <span className="font-bold text-lg text-slate-100">{p.name}</span>
                           {isEliminated && <span className="text-xs text-red-400">ELIMINATED</span>}
                         </div>
                         <span className={`text-xs font-bold px-2 py-1 rounded ${
@@ -757,10 +745,6 @@ const GameSession = () => {
                           {p.score} pts
                         </span>
                       </div>
-                      
-                      {isActive && !isEliminated && (
-                        <div className="absolute -top-3 -right-3 w-6 h-6 bg-orange-500 rounded-full animate-bounce shadow-lg"></div>
-                      )}
                       
                       {/* Rummy Quick Actions - Set Points */}
                       {isOperatorOrAdmin && !isEliminated && currentPhase !== 'SETUP' && (
