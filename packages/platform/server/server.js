@@ -2096,7 +2096,7 @@ async function initializeGameManager(sessionName) {
               }
             });
             
-            // Update player scores
+            // Update player scores - Rummy uses 'score' field
             if (summary.leaderboard) {
               for (const player of summary.leaderboard) {
                 await prisma.player.updateMany({
@@ -2105,7 +2105,7 @@ async function initializeGameManager(sessionName) {
                     name: player.name
                   },
                   data: { 
-                    sessionBalance: player.totalScore 
+                    score: player.totalScore 
                   }
                 });
               }

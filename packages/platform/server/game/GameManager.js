@@ -540,6 +540,7 @@ class GameManager extends EventEmitter {
             }
         });
 
+        const completedRound = this.currentRound;
         this.currentRound++;
         
         const isSessionOver = this.currentRound > this.totalRounds;
@@ -550,7 +551,7 @@ class GameManager extends EventEmitter {
             winner,
             pot: this.gameState.pot,
             netChanges,
-            currentRound: this.currentRound,
+            currentRound: completedRound,
             isSessionOver
         });
         
