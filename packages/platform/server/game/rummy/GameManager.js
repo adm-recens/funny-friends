@@ -141,6 +141,9 @@ class RummyLedger extends EventEmitter {
         // Check elimination
         this.checkElimination(player);
         
+        // Check if only one player remains (auto-win)
+        this.checkAutoWin();
+        
         this.emit('state_change', this.getPublicState());
         return { success: true, player, points };
     }
@@ -168,8 +171,30 @@ class RummyLedger extends EventEmitter {
         // Check elimination
         this.checkElimination(player);
         
+        // Check if only one player remains (auto-win)
+        this.checkAutoWin();
+        
         this.emit('state_change', this.getPublicState());
         return { success: true, player, points };
+    }
+
+    // Check if only one non-dropped player remains (auto-win scenario)
+    checkAutoWin() {
+        const activePlayers = this.gameState.players.filter(p => p.status === 'PLAYING');
+        const playersNotDropped = activePlayers.filter(p => p.roundScore === 0);
+        
+        // If only one player hasn't dropped and no one has declared rummy yet
+        if (playersNotDropped.length === 1 && !this.gameState.rummyDeclaredBy && !this.gameState.wrongShowBy) {
+            const lastPlayer = playersNotDropped[0];
+            this.gameState.rummyDeclaredBy = lastPlayer;
+            this.gameState.roundCompletionPhase = true;
+            this.gameState.currentLogs.push(`🏆 ${lastPlayer.name} wins automatically! (All others dropped)`);
+            
+            // Auto-end the round since everyone else has dropped
+            setTimeout(() => {
+                this.endRoundWithWinner(lastPlayer);
+            }, 1000);
+        }
     }
 
     // Rummy: Player declares rummy correctly = 0 points, round enters completion phase

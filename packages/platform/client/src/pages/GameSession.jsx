@@ -518,22 +518,37 @@ const GameSession = () => {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {isRummy && currentPhase !== 'SETUP' && isOperatorOrAdmin && (
-                <button
-                  onClick={handleEndRound}
-                  className={`px-3 py-1.5 text-white text-sm font-bold rounded-lg flex items-center gap-1 ${
-                    gameState?.roundCompletionPhase && gameState?.playersNeedingPoints === 0
-                      ? 'bg-green-600 hover:bg-green-700 animate-pulse'
-                      : 'bg-blue-600 hover:bg-blue-700'
-                  }`}
-                >
-                  <Trophy size={14} /> 
-                  {gameState?.roundCompletionPhase 
-                    ? `End Round ${gameState?.playersNeedingPoints > 0 ? `(${gameState.playersNeedingPoints} pending)` : '✓'}`
-                    : 'End Round'
-                  }
-                </button>
+              {/* Game Controls - End Round & End Session */}
+              {currentPhase !== 'SETUP' && isOperatorOrAdmin && (
+                <div className="flex items-center gap-2">
+                  {isRummy && (
+                    <button
+                      onClick={handleEndRound}
+                      className={`px-3 py-1.5 text-white text-sm font-bold rounded-lg flex items-center gap-1 ${
+                        gameState?.roundCompletionPhase && gameState?.playersNeedingPoints === 0
+                          ? 'bg-green-600 hover:bg-green-700 animate-pulse'
+                          : 'bg-blue-600 hover:bg-blue-700'
+                      }`}
+                    >
+                      <Trophy size={14} /> 
+                      {gameState?.roundCompletionPhase 
+                        ? `End Round ${gameState?.playersNeedingPoints > 0 ? `(${gameState.playersNeedingPoints} pending)` : '✓'}`
+                        : 'End Round'
+                      }
+                    </button>
+                  )}
+                  <button
+                    onClick={handleEndGame}
+                    className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-lg flex items-center gap-1"
+                    title="End the entire session"
+                  >
+                    <Square size={14} />
+                    End Session
+                  </button>
+                </div>
               )}
+              
+              {/* Game Info Display */}
               {isRummy ? (
                 <div className="flex items-center gap-2 text-yellow-400 text-sm">
                   <Star size={16} />
@@ -544,6 +559,8 @@ const GameSession = () => {
                   Pot: {gameState?.pot || 0}
                 </span>
               )}
+              
+              {/* Connection Status */}
               {isConnected ? (
                 <Wifi size={16} className="text-green-500" />
               ) : (
@@ -936,16 +953,6 @@ const GameSession = () => {
               </div>
             )}
 
-            {/* End Session Button */}
-            <div className="flex gap-3">
-              <button
-                onClick={handleEndGame}
-                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors"
-              >
-                <Square size={18} />
-                End Session
-              </button>
-            </div>
           </div>
         )}
       </div>
