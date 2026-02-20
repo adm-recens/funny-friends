@@ -199,12 +199,19 @@ const GameSession = () => {
       toast.error(message);
     };
 
+    const onSessionEndedConfirm = (data) => {
+      if (data.success) {
+        toast.success(data.message);
+      }
+    };
+
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
     socket.on('game_update', onGameUpdate);
     socket.on('hand_update', onHandUpdate);
     socket.on('viewer_requested', onViewerRequested);
     socket.on('session_ended', onSessionEnded);
+    socket.on('session_ended_confirm', onSessionEndedConfirm);
     socket.on('error_message', onErrorMessage);
 
     if (!socket.connected) {
@@ -222,6 +229,7 @@ const GameSession = () => {
       socket.off('hand_update', onHandUpdate);
       socket.off('viewer_requested', onViewerRequested);
       socket.off('session_ended', onSessionEnded);
+      socket.off('session_ended_confirm', onSessionEndedConfirm);
       socket.off('error_message', onErrorMessage);
       socket.emit('leave_session', { sessionName: decodedSessionName });
     };

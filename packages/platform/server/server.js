@@ -2684,26 +2684,41 @@ io.on('connection', (socket) => {
       const manager = activeSessions.get(sessionName);
       let finalRound = session.currentRound;
       let totalRounds = session.totalRounds;
+      let finalPlayers = [];
 
       if (manager) {
         finalRound = manager.currentRound;
         totalRounds = manager.totalRounds;
+        // Get players from manager
+        const state = manager.getPublicState();
+        finalPlayers = state.players || state.gamePlayers || [];
         // Call endSession if available (for proper cleanup)
         if (manager.endSession) {
           manager.endSession();
         }
         activeSessions.delete(sessionName);
+      } else {
+        // Fetch players from database if manager not in memory
+        const dbPlayers = await prisma.player.findMany({ where: { sessionId: session.id } });
+        finalPlayers = dbPlayers.map(p => ({
+          id: p.id,
+          name: p.name,
+          sessionBalance: p.sessionBalance,
+          score: p.score,
+          status: p.status
+        }));
       }
 
       // Notify all clients
       io.to(sessionName).emit('session_ended', {
         reason: 'OPERATOR_ENDED',
         finalRound,
-        totalRounds
+        totalRounds,
+        finalPlayers
       });
 
       // Confirm to operator
-      socket.emit('error_message', 'Session ended successfully');
+      socket.emit('session_ended_confirm', { success: true, message: 'Session ended successfully' });
 
       console.log(`[DEBUG] Session ${sessionName} manually ended by operator`);
     } catch (e) {
