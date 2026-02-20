@@ -2361,11 +2361,21 @@ io.on('connection', (socket) => {
             } else {
               // Session exists but is inactive (ended) - return session info for display
               console.log(`[DEBUG] Session ${sessionName} is ended, returning final state`);
+              // Fetch players from database for ended session
+              const endedSessionPlayers = await prisma.player.findMany({ where: { sessionId: dbSession.id } });
+              const finalPlayersList = endedSessionPlayers.map(p => ({
+                id: p.id,
+                name: p.name,
+                sessionBalance: p.sessionBalance,
+                score: p.score || p.sessionBalance,
+                seat: p.seatPosition,
+                status: p.status || 'PLAYING'
+              }));
               return { 
                 isEnded: true, 
                 finalRound: dbSession.currentRound,
                 totalRounds: dbSession.totalRounds,
-                finalPlayers: initialPlayers
+                finalPlayers: finalPlayersList
               };
             }
           } catch (e) {
