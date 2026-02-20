@@ -394,8 +394,12 @@ class RummyLedger extends EventEmitter {
             }))
             .sort((a, b) => a.totalScore - b.totalScore);
 
+        // Find first active player for turn indication
+        const activePlayerIndex = this.gameState.players.findIndex(p => p.status === 'PLAYING');
+
         return {
             players: this.gameState.players,
+            gamePlayers: this.gameState.players, // For frontend compatibility
             leaderboard: leaderboard,
             currentLogs: this.gameState.currentLogs,
             phase: this.gameState.phase,
@@ -404,7 +408,8 @@ class RummyLedger extends EventEmitter {
             targetScore: this.targetScore,
             gameLimitType: this.gameLimitType,
             winner: this.gameState.winner,
-            roundInProgress: this.gameState.roundInProgress
+            roundInProgress: this.gameState.roundInProgress,
+            activePlayerIndex: activePlayerIndex >= 0 ? activePlayerIndex : 0
         };
     }
 }
