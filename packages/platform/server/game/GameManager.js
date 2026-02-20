@@ -344,6 +344,11 @@ class GameManager extends EventEmitter {
         
         const { requester, target } = this.gameState.sideShowRequest;
         
+        // Validate winnerId is either requester or target
+        if (winnerId !== requester.id && winnerId !== target.id) {
+            return { success: false, error: "Invalid winner ID" };
+        }
+        
         const winner = winnerId === requester.id ? requester : target;
         const loser = winnerId === requester.id ? target : requester;
         
@@ -362,10 +367,11 @@ class GameManager extends EventEmitter {
         }
         
         this.gameState.sideShowRequest = null;
+        // Turn goes to the player after the requester (not the requester themselves)
         this.gameState.activePlayerIndex = this.getNextActiveIndex(requesterIndex);
         
         this.emit('state_change', this.getPublicState());
-        return { success: true };
+        return { success: true, winner, loser };
     }
 
     requestShow(player, targetId) {
@@ -437,15 +443,22 @@ class GameManager extends EventEmitter {
         
         const { requester, target, isForceShow } = this.gameState.showRequest;
         
+        // Validate winnerId is either requester or target
+        if (winnerId !== requester.id && winnerId !== target.id) {
+            return { success: false, error: "Invalid winner ID" };
+        }
+        
         const winner = winnerId === requester.id ? requester : target;
         const loser = winnerId === requester.id ? target : requester;
         
         if (isForceShow) {
             if (winner.id === requester.id) {
+                // SEEN player wins against BLIND player
                 this.gameState.currentLogs.push(`${requester.name} (SEEN) wins Force Show against ${target.name} (BLIND)`);
                 target.folded = true;
                 this.gameState.currentLogs.push(`${target.name} packed.`);
             } else {
+                // BLIND player wins against SEEN player - SEEN player pays penalty
                 const penalty = this.gameState.currentStake * 2;
                 requester.invested += penalty;
                 this.gameState.pot += penalty;
@@ -461,11 +474,15 @@ class GameManager extends EventEmitter {
             const remaining = this.gameState.gamePlayers.filter(p => !p.folded);
             if (remaining.length === 1) {
                 this.endHand(remaining[0]);
+                return { success: true, winner, loser };
             } else {
+                // Turn goes to player after requester
                 this.gameState.activePlayerIndex = this.getNextActiveIndex(requesterIndex);
                 this.emit('state_change', this.getPublicState());
+                return { success: true, winner, loser };
             }
         } else {
+            // Regular Show - both players show cards, higher hand wins
             this.gameState.currentLogs.push(`${requester.name} showed cards against ${target.name}`);
             this.gameState.showRequest = null;
             this.endHand(winner);
