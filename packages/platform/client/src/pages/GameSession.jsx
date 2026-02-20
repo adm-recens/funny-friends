@@ -277,7 +277,63 @@ const GameSession = () => {
     setShowRequest(null);
   };
 
-  // Rummy Actions
+  // Rummy Ledger Actions
+  const handleRecordInitialDrop = () => {
+    const activePlayer = gamePlayers[gameState?.activePlayerIndex];
+    if (!activePlayer) {
+      toast.error('No active player');
+      return;
+    }
+    sendGameAction('RECORD_INITIAL_DROP', { playerId: activePlayer.id });
+    toast.success(`${activePlayer.name} - Initial Drop (20 points)`);
+  };
+
+  const handleRecordMiddleDrop = () => {
+    const activePlayer = gamePlayers[gameState?.activePlayerIndex];
+    if (!activePlayer) {
+      toast.error('No active player');
+      return;
+    }
+    sendGameAction('RECORD_MIDDLE_DROP', { playerId: activePlayer.id });
+    toast.success(`${activePlayer.name} - Middle Drop (40 points)`);
+  };
+
+  const handleRecordValidShow = () => {
+    const activePlayer = gamePlayers[gameState?.activePlayerIndex];
+    if (!activePlayer) {
+      toast.error('No active player');
+      return;
+    }
+    sendGameAction('RECORD_VALID_SHOW', { playerId: activePlayer.id });
+    toast.success(`${activePlayer.name} - Valid Rummy Show (0 points)`);
+  };
+
+  const handleRecordWrongShow = () => {
+    const activePlayer = gamePlayers[gameState?.activePlayerIndex];
+    if (!activePlayer) {
+      toast.error('No active player');
+      return;
+    }
+    sendGameAction('RECORD_WRONG_SHOW', { playerId: activePlayer.id });
+    toast.success(`${activePlayer.name} - Wrong Show (80 points penalty)`);
+  };
+
+  const handleRecordCardPoints = (playerId, points) => {
+    const pointsInt = parseInt(points);
+    if (isNaN(pointsInt) || pointsInt < 0) {
+      toast.error('Please enter valid points');
+      return;
+    }
+    sendGameAction('RECORD_CARD_POINTS', { playerId, points: pointsInt });
+    toast.success(`Recorded ${pointsInt} points`);
+  };
+
+  const handleEndRound = () => {
+    sendGameAction('END_ROUND');
+    toast.success('Round ended');
+  };
+
+  // Legacy Rummy Actions (kept for backward compatibility)
   const handleDrawCard = (source = 'draw') => {
     const activePlayer = gamePlayers[gameState?.activePlayerIndex];
     sendGameAction('DRAW_CARD', { source });
@@ -754,48 +810,100 @@ const GameSession = () => {
               </div>
             )}
 
-            {/* Rummy Controls */}
-            {isOperatorOrAdmin && activePlayer && isRummy && currentPhase !== 'SETUP' && (
-              <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
-                <div className="flex justify-between items-end mb-4">
-                  <div>
-                    <div className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Current Player</div>
-                    <div className="text-2xl font-bold text-white">{activePlayer.name}</div>
+            {/* Rummy Ledger Controls */}
+            {isOperatorOrAdmin && isRummy && currentPhase !== 'SETUP' && (
+              <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 space-y-4">
+                <div className="border-b border-slate-700 pb-4">
+                  <h3 className="text-lg font-bold text-slate-50 mb-2">Record Game Actions</h3>
+                  <p className="text-xs text-slate-400">Record actions as they happen in the physical game</p>
+                </div>
+
+                {/* Current Player Info */}
+                {activePlayer && (
+                  <div className="bg-slate-700/50 p-3 rounded-lg">
+                    <div className="text-xs text-slate-400 uppercase">Recording for</div>
+                    <div className="text-xl font-bold text-white">{activePlayer.name}</div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Phase</div>
-                    <div className="text-2xl font-mono text-orange-500">{currentPhase}</div>
+                )}
+
+                {/* Drop Actions */}
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={handleRecordInitialDrop}
+                    className="py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-bold text-sm flex flex-col items-center justify-center gap-1"
+                  >
+                    <span>Initial Drop</span>
+                    <span className="text-xs opacity-80">20 points</span>
+                  </button>
+                  <button
+                    onClick={handleRecordMiddleDrop}
+                    className="py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-xl font-bold text-sm flex flex-col items-center justify-center gap-1"
+                  >
+                    <span>Middle Drop</span>
+                    <span className="text-xs opacity-80">40 points</span>
+                  </button>
+                </div>
+
+                {/* Show Actions */}
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={handleRecordValidShow}
+                    className="py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-bold text-sm flex flex-col items-center justify-center gap-1"
+                  >
+                    <span>Valid Show</span>
+                    <span className="text-xs opacity-80">0 points</span>
+                  </button>
+                  <button
+                    onClick={handleRecordWrongShow}
+                    className="py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-bold text-sm flex flex-col items-center justify-center gap-1"
+                  >
+                    <span>Wrong Show</span>
+                    <span className="text-xs opacity-80">80 pts penalty</span>
+                  </button>
+                </div>
+
+                {/* Card Points Entry */}
+                <div className="bg-slate-700/30 p-4 rounded-lg">
+                  <h4 className="text-sm font-bold text-slate-300 mb-3">Record Card Points</h4>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {players.filter(p => !p.eliminated).map(player => (
+                      <div key={player.id} className="flex items-center gap-2">
+                        <span className="text-sm text-slate-300 flex-1">{player.name}</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="200"
+                          placeholder="Points"
+                          className="w-20 px-2 py-1 bg-slate-700 border border-slate-600 rounded text-white text-sm"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              handleRecordCardPoints(player.id, e.target.value);
+                              e.target.value = '';
+                            }
+                          }}
+                        />
+                        <button
+                          onClick={(e) => {
+                            const input = e.target.previousElementSibling;
+                            handleRecordCardPoints(player.id, input.value);
+                            input.value = '';
+                          }}
+                          className="px-3 py-1 bg-violet-600 text-white text-xs rounded hover:bg-violet-700"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
-                {currentPhase === 'DISCARD' && selectedCard && (
-                  <button
-                    onClick={handleDiscardCard}
-                    className="w-full py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-bold mb-4 flex items-center justify-center gap-2"
-                  >
-                    <Trash2 size={20} /> Discard Selected Card
-                  </button>
-                )}
-
-                {gameState?.declaredPlayer && !showResolveDeclareModal && (
-                  <div className="mb-4">
-                    <button
-                      onClick={() => setShowResolveDeclareModal(true)}
-                      className="w-full py-3 bg-gradient-to-r from-yellow-500 to-orange-500 text-black rounded-xl font-bold flex items-center justify-center gap-2"
-                    >
-                      <Trophy size={20} /> Resolve Declaration
-                    </button>
-                  </div>
-                )}
-
-                {currentPhase === 'DRAW' && (
-                  <button
-                    onClick={() => setShowDeclareModal(true)}
-                    className="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-bold flex items-center justify-center gap-2"
-                  >
-                    <Trophy size={20} /> Declare Rummy
-                  </button>
-                )}
+                {/* End Round */}
+                <button
+                  onClick={handleEndRound}
+                  className="w-full py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-bold flex items-center justify-center gap-2"
+                >
+                  <Trophy size={20} /> End Round & Show Leaderboard
+                </button>
               </div>
             )}
 
@@ -966,11 +1074,34 @@ const GameSession = () => {
               </p>
             </div>
 
-            {roundSummaryData.netChanges && Object.keys(roundSummaryData.netChanges).length > 0 && (
+            {/* Rummy Leaderboard */}
+            {isRummy && roundSummaryData.leaderboard && (
               <div className="mb-6">
-                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-3">
-                  {isRummy ? 'Points' : 'Net Changes'}
-                </h3>
+                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-3">Leaderboard</h3>
+                <div className="space-y-2">
+                  {roundSummaryData.leaderboard.map((player, index) => (
+                    <div key={player.id} className="flex justify-between items-center bg-slate-700/50 p-3 rounded-xl">
+                      <div className="flex items-center gap-3">
+                        <span className="text-slate-400 font-mono">#{index + 1}</span>
+                        <span className="font-bold text-slate-50">{player.name}</span>
+                        {player.status === 'ELIMINATED' && (
+                          <span className="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded">OUT</span>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <div className="font-bold text-white">{player.totalScore} pts</div>
+                        <div className="text-xs text-slate-400">+{player.roundScore} this round</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Teen Patti Net Changes */}
+            {!isRummy && roundSummaryData.netChanges && Object.keys(roundSummaryData.netChanges).length > 0 && (
+              <div className="mb-6">
+                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-3">Net Changes</h3>
                 <div className="space-y-2">
                   {Object.entries(roundSummaryData.netChanges).map(([playerId, change]) => {
                     const player = players.find(p => p.id === parseInt(playerId));
@@ -978,8 +1109,8 @@ const GameSession = () => {
                     return (
                       <div key={playerId} className="flex justify-between items-center bg-slate-700/50 p-3 rounded-xl">
                         <span className="font-bold text-slate-50">{player.name}</span>
-                        <span className={`font-bold ${change >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-                          {isRummy ? (change > 0 ? `+${change}` : change) : (change >= 0 ? '+' : '') + change} {isRummy && 'pts'}
+                        <span className={`font-bold ${change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {change >= 0 ? '+' : ''}{change}
                         </span>
                       </div>
                     );
