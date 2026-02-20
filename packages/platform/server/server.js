@@ -54,6 +54,13 @@ app.set('trust proxy', 1);
 // Setup Prisma Client (Centralized in db.js)
 const prisma = require('./db');
 
+// --- IN-MEMORY STATE MANAGEMENT ---
+// These must be declared BEFORE any route handlers that use them
+const activeSessions = new Map(); // sessionName -> GameManager
+const sessionLoaders = new Map(); // Track ongoing session loads to prevent race conditions
+const pendingViewerRequests = new Map(); // sessionName -> [{ socketId, name, timestamp }]
+const approvedViewers = new Map(); // sessionName -> Set of socket IDs
+
 // Export prisma for use in controllers
 // module.exports moved to end of file
 
@@ -1964,11 +1971,7 @@ app.post('/api/sessions', requireAuth, asyncHandler(async (req, res) => {
 
 // 5. REAL-TIME SOCKET
 
-// --- IN-MEMORY STATE ---
-const activeSessions = new Map();
-const sessionLoaders = new Map(); // Track ongoing session loads to prevent race conditions
-const pendingViewerRequests = new Map(); // sessionName -> [{ socketId, name, timestamp }]
-const approvedViewers = new Map(); // sessionName -> Set of socket IDs
+// Note: In-memory state Maps (activeSessions, sessionLoaders, etc.) are declared at top of file
 
 // --- GAME MANAGER INITIALIZATION ---
 async function initializeGameManager(sessionName) {
@@ -2570,8 +2573,83 @@ io.on('connection', (socket) => {
         const result = manager.handleAction(action);
         if (!result.success) socket.emit('error_message', result.error);
       }
+    } else if (action.type === 'FOLD') {
+      // Teen Patti: Fold action
+      console.log('[DEBUG] Processing FOLD action for player:', action.playerId);
+      if (manager.handleAction) {
+        const result = manager.handleAction({
+          type: 'FOLD',
+          playerId: action.playerId
+        });
+        if (!result.success) socket.emit('error_message', result.error);
+      }
+    } else if (action.type === 'SEEN') {
+      // Teen Patti: See cards action
+      console.log('[DEBUG] Processing SEEN action for player:', action.playerId);
+      if (manager.handleAction) {
+        const result = manager.handleAction({
+          type: 'SEEN',
+          playerId: action.playerId
+        });
+        if (!result.success) socket.emit('error_message', result.error);
+      }
+    } else if (action.type === 'BET') {
+      // Teen Patti: Bet action
+      console.log('[DEBUG] Processing BET action:', action.amount, 'isDouble:', action.isDouble);
+      if (manager.handleAction) {
+        const result = manager.handleAction({
+          type: 'BET',
+          playerId: action.playerId,
+          amount: action.amount,
+          isDouble: action.isDouble
+        });
+        if (!result.success) socket.emit('error_message', result.error);
+      }
+    } else if (action.type === 'SIDE_SHOW_REQUEST') {
+      // Teen Patti: Side show request
+      console.log('[DEBUG] Processing SIDE_SHOW_REQUEST from:', action.playerId, 'to:', action.targetId);
+      if (manager.handleAction) {
+        const result = manager.handleAction({
+          type: 'SIDE_SHOW_REQUEST',
+          playerId: action.playerId,
+          targetId: action.targetId
+        });
+        if (!result.success) socket.emit('error_message', result.error);
+      }
+    } else if (action.type === 'SIDE_SHOW_RESOLVE') {
+      // Teen Patti: Side show resolve
+      console.log('[DEBUG] Processing SIDE_SHOW_RESOLVE winner:', action.winnerId);
+      if (manager.handleAction) {
+        const result = manager.handleAction({
+          type: 'SIDE_SHOW_RESOLVE',
+          winnerId: action.winnerId
+        });
+        if (!result.success) socket.emit('error_message', result.error);
+      }
+    } else if (action.type === 'SHOW') {
+      // Teen Patti: Show/Force Show request
+      console.log('[DEBUG] Processing SHOW action from:', action.playerId, 'target:', action.targetId);
+      if (manager.handleAction) {
+        const result = manager.handleAction({
+          type: 'SHOW',
+          playerId: action.playerId,
+          targetId: action.targetId
+        });
+        if (!result.success) socket.emit('error_message', result.error);
+      }
+    } else if (action.type === 'SHOW_RESOLVE') {
+      // Teen Patti: Show resolve
+      console.log('[DEBUG] Processing SHOW_RESOLVE winner:', action.winnerId);
+      if (manager.handleAction) {
+        const result = manager.handleAction({
+          type: 'SHOW_RESOLVE',
+          winnerId: action.winnerId
+        });
+        if (!result.success) socket.emit('error_message', result.error);
+      }
     } else {
       // Default: pass to manager's handleAction
+      console.log('[DEBUG] Unhandled action type:', action.type, '- passing to manager.handleAction');
       if (manager.handleAction) {
         const result = manager.handleAction(action);
         if (!result.success) socket.emit('error_message', result.error);
