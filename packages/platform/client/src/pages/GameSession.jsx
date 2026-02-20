@@ -502,6 +502,14 @@ const GameSession = () => {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {isRummy && currentPhase !== 'SETUP' && isOperatorOrAdmin && (
+                <button
+                  onClick={handleEndRound}
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg flex items-center gap-1"
+                >
+                  <Trophy size={14} /> End Round
+                </button>
+              )}
               {isRummy ? (
                 <div className="flex items-center gap-2 text-yellow-400 text-sm">
                   <Star size={16} />
@@ -711,6 +719,65 @@ const GameSession = () => {
                       {isActive && !isEliminated && (
                         <div className="absolute -top-3 -right-3 w-6 h-6 bg-orange-500 rounded-full animate-bounce shadow-lg"></div>
                       )}
+                      
+                      {/* Rummy Action Buttons */}
+                      {isOperatorOrAdmin && !isEliminated && currentPhase !== 'SETUP' && (
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          <button
+                            onClick={() => sendGameAction('RECORD_INITIAL_DROP', { playerId: p.id })}
+                            className="py-1.5 px-2 bg-orange-600/80 hover:bg-orange-600 text-white text-xs font-bold rounded-lg"
+                          >
+                            Initial Drop
+                          </button>
+                          <button
+                            onClick={() => sendGameAction('RECORD_MIDDLE_DROP', { playerId: p.id })}
+                            className="py-1.5 px-2 bg-amber-600/80 hover:bg-amber-600 text-white text-xs font-bold rounded-lg"
+                          >
+                            Middle Drop
+                          </button>
+                          <button
+                            onClick={() => sendGameAction('RECORD_VALID_SHOW', { playerId: p.id })}
+                            className="py-1.5 px-2 bg-green-600/80 hover:bg-green-600 text-white text-xs font-bold rounded-lg"
+                          >
+                            Valid Show
+                          </button>
+                          <button
+                            onClick={() => sendGameAction('RECORD_WRONG_SHOW', { playerId: p.id })}
+                            className="py-1.5 px-2 bg-red-600/80 hover:bg-red-600 text-white text-xs font-bold rounded-lg"
+                          >
+                            Wrong Show
+                          </button>
+                        </div>
+                      )}
+                      
+                      {/* Card Points Input */}
+                      {isOperatorOrAdmin && !isEliminated && currentPhase !== 'SETUP' && (
+                        <div className="mt-2 flex gap-2">
+                          <input
+                            type="number"
+                            min="0"
+                            max="200"
+                            placeholder="Card pts"
+                            className="flex-1 px-2 py-1 bg-slate-700 border border-slate-600 rounded text-white text-xs"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                sendGameAction('RECORD_CARD_POINTS', { playerId: p.id, points: parseInt(e.target.value) });
+                                e.target.value = '';
+                              }
+                            }}
+                          />
+                          <button
+                            onClick={(e) => {
+                              const input = e.target.previousElementSibling;
+                              sendGameAction('RECORD_CARD_POINTS', { playerId: p.id, points: parseInt(input.value) });
+                              input.value = '';
+                            }}
+                            className="px-2 py-1 bg-violet-600 text-white text-xs rounded hover:bg-violet-700"
+                          >
+                            Add
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 }
@@ -807,103 +874,6 @@ const GameSession = () => {
                     <Trophy size={16} /> {canForceShow ? 'FORCE SHOW' : 'SHOW'}
                   </button>
                 </div>
-              </div>
-            )}
-
-            {/* Rummy Ledger Controls */}
-            {isOperatorOrAdmin && isRummy && currentPhase !== 'SETUP' && (
-              <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 space-y-4">
-                <div className="border-b border-slate-700 pb-4">
-                  <h3 className="text-lg font-bold text-slate-50 mb-2">Record Game Actions</h3>
-                  <p className="text-xs text-slate-400">Record actions as they happen in the physical game</p>
-                </div>
-
-                {/* Current Player Info */}
-                {activePlayer && (
-                  <div className="bg-slate-700/50 p-3 rounded-lg">
-                    <div className="text-xs text-slate-400 uppercase">Recording for</div>
-                    <div className="text-xl font-bold text-white">{activePlayer.name}</div>
-                  </div>
-                )}
-
-                {/* Drop Actions */}
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={handleRecordInitialDrop}
-                    className="py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-bold text-sm flex flex-col items-center justify-center gap-1"
-                  >
-                    <span>Initial Drop</span>
-                    <span className="text-xs opacity-80">20 points</span>
-                  </button>
-                  <button
-                    onClick={handleRecordMiddleDrop}
-                    className="py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-xl font-bold text-sm flex flex-col items-center justify-center gap-1"
-                  >
-                    <span>Middle Drop</span>
-                    <span className="text-xs opacity-80">40 points</span>
-                  </button>
-                </div>
-
-                {/* Show Actions */}
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={handleRecordValidShow}
-                    className="py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-bold text-sm flex flex-col items-center justify-center gap-1"
-                  >
-                    <span>Valid Show</span>
-                    <span className="text-xs opacity-80">0 points</span>
-                  </button>
-                  <button
-                    onClick={handleRecordWrongShow}
-                    className="py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-bold text-sm flex flex-col items-center justify-center gap-1"
-                  >
-                    <span>Wrong Show</span>
-                    <span className="text-xs opacity-80">80 pts penalty</span>
-                  </button>
-                </div>
-
-                {/* Card Points Entry */}
-                <div className="bg-slate-700/30 p-4 rounded-lg">
-                  <h4 className="text-sm font-bold text-slate-300 mb-3">Record Card Points</h4>
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {players.filter(p => !p.eliminated).map(player => (
-                      <div key={player.id} className="flex items-center gap-2">
-                        <span className="text-sm text-slate-300 flex-1">{player.name}</span>
-                        <input
-                          type="number"
-                          min="0"
-                          max="200"
-                          placeholder="Points"
-                          className="w-20 px-2 py-1 bg-slate-700 border border-slate-600 rounded text-white text-sm"
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              handleRecordCardPoints(player.id, e.target.value);
-                              e.target.value = '';
-                            }
-                          }}
-                        />
-                        <button
-                          onClick={(e) => {
-                            const input = e.target.previousElementSibling;
-                            handleRecordCardPoints(player.id, input.value);
-                            input.value = '';
-                          }}
-                          className="px-3 py-1 bg-violet-600 text-white text-xs rounded hover:bg-violet-700"
-                        >
-                          Add
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* End Round */}
-                <button
-                  onClick={handleEndRound}
-                  className="w-full py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-bold flex items-center justify-center gap-2"
-                >
-                  <Trophy size={20} /> End Round & Show Leaderboard
-                </button>
               </div>
             )}
 
