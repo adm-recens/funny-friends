@@ -42,6 +42,7 @@ const GameSession = () => {
   const [playerHand, setPlayerHand] = useState([]);
   const [showDeclareModal, setShowDeclareModal] = useState(false);
   const [showResolveDeclareModal, setShowResolveDeclareModal] = useState(false);
+  const [playerPoints, setPlayerPoints] = useState({}); // Track points input for each player
 
   const isOperatorOrAdmin = user?.role === 'OPERATOR' || user?.role === 'ADMIN';
   const isRummy = session?.gameCode === 'rummy';
@@ -662,56 +663,35 @@ const GameSession = () => {
         {/* ACTIVE GAME */}
         {currentPhase !== 'SETUP' && (
           <div className="space-y-6">
-            
-            {/* Rummy: Draw/Discard Area */}
-            {isRummy && (
-              <div className="flex items-center justify-center gap-8 py-4">
-                {/* Draw Pile */}
-                <div 
-                  onClick={() => currentPhase === 'DRAW' && handleDrawCard('draw')}
-                  className={`relative cursor-pointer transform hover:scale-105 transition-transform ${currentPhase !== 'DRAW' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  <div className="w-20 h-28 bg-slate-700 rounded-xl border-2 border-slate-500 flex items-center justify-center">
-                    <div className="text-slate-400 text-center">
-                      <ArrowDown size={24} className="mx-auto mb-1" />
-                      <span className="text-xs">Draw</span>
-                      <div className="text-xs text-slate-500">{gameState?.drawPileCount || 0}</div>
-                    </div>
-                  </div>
-                  <div className="absolute -top-2 -right-2 w-8 h-8 bg-slate-600 rounded-full flex items-center justify-center text-xs font-bold text-white">
-                    {gameState?.drawPileCount || 0}
-                  </div>
-                </div>
 
-                {/* VS */}
-                <div className="text-slate-500 font-bold text-2xl">VS</div>
-
-                {/* Discard Pile */}
-                <div 
-                  onClick={() => currentPhase === 'DRAW' && handleDrawCard('discard')}
-                  className={`relative cursor-pointer transform hover:scale-105 transition-transform ${currentPhase !== 'DRAW' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  {gameState?.discardPile?.[0] ? (
-                    getCardDisplay(gameState.discardPile[0])
-                  ) : (
-                    <div className="w-12 h-16 bg-slate-700 rounded-lg flex items-center justify-center">
-                      <span className="text-slate-500 text-xs">Empty</span>
-                    </div>
-                  )}
-                  <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs text-slate-400 whitespace-nowrap">
-                    Discard
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Players Grid */}
+            {/* Players Grid -->
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {gamePlayers.map((p, idx) => {
                 const isActive = idx === gameState?.activePlayerIndex;
                 
                 if (isRummy) {
                   const isEliminated = p.status === 'ELIMINATED';
+                  const currentPoints = playerPoints[p.id] || '';
+                  
+                  const handlePointsChange = (value) => {
+                    setPlayerPoints(prev => ({ ...prev, [p.id]: value }));
+                  };
+                  
+                  const handleRecordPoints = () => {
+                    const points = parseInt(currentPoints);
+                    if (isNaN(points) || points < 0) {
+                      toast.error(`Please enter valid points for ${p.name}`);
+                      return;
+                    }
+                    sendGameAction('RECORD_CARD_POINTS', { playerId: p.id, points });
+                    setPlayerPoints(prev => ({ ...prev, [p.id]: '' }));
+                    toast.success(`Recorded ${points} points for ${p.name}`);
+                  };
+                  
+                  const setPredefinedPoints = (points) => {
+                    setPlayerPoints(prev => ({ ...prev, [p.id]: points.toString() }));
+                  };
+                  
                   return (
                     <div 
                       key={p.id || idx} 
@@ -735,62 +715,96 @@ const GameSession = () => {
                         <div className="absolute -top-3 -right-3 w-6 h-6 bg-orange-500 rounded-full animate-bounce shadow-lg"></div>
                       )}
                       
-                      {/* Rummy Action Buttons */}
+                      {/* Rummy Quick Actions - Set Points */}
                       {isOperatorOrAdmin && !isEliminated && currentPhase !== 'SETUP' && (
-                        <div className="mt-3 grid grid-cols-2 gap-2">
-                          <button
-                            onClick={() => sendGameAction('RECORD_INITIAL_DROP', { playerId: p.id })}
-                            className="py-1.5 px-2 bg-orange-600/80 hover:bg-orange-600 text-white text-xs font-bold rounded-lg"
-                          >
-                            Initial Drop
-                          </button>
-                          <button
-                            onClick={() => sendGameAction('RECORD_MIDDLE_DROP', { playerId: p.id })}
-                            className="py-1.5 px-2 bg-amber-600/80 hover:bg-amber-600 text-white text-xs font-bold rounded-lg"
-                          >
-                            Middle Drop
-                          </button>
-                          <button
-                            onClick={() => sendGameAction('RECORD_VALID_SHOW', { playerId: p.id })}
-                            className="py-1.5 px-2 bg-green-600/80 hover:bg-green-600 text-white text-xs font-bold rounded-lg"
-                          >
-                            Valid Show
-                          </button>
-                          <button
-                            onClick={() => sendGameAction('RECORD_WRONG_SHOW', { playerId: p.id })}
-                            className="py-1.5 px-2 bg-red-600/80 hover:bg-red-600 text-white text-xs font-bold rounded-lg"
-                          >
-                            Wrong Show
-                          </button>
+                        <div className="mt-3">
+                          <div className="text-xs text-slate-400 mb-2 uppercase tracking-wider font-bold">Quick Set Points</div>
+                          <div className="grid grid-cols-4 gap-1">
+                            <button
+                              onClick={() => setPredefinedPoints(20)}
+                              className={`py-1.5 px-1 text-[10px] font-bold rounded ${
+                                currentPoints === '20' 
+                                  ? 'bg-orange-600 text-white ring-2 ring-orange-400' 
+                                  : 'bg-orange-600/30 text-orange-400 hover:bg-orange-600/50'
+                              }`}
+                            >
+                              Initial
+                              <div className="text-[8px] opacity-80">20</div>
+                            </button>
+                            <button
+                              onClick={() => setPredefinedPoints(40)}
+                              className={`py-1.5 px-1 text-[10px] font-bold rounded ${
+                                currentPoints === '40' 
+                                  ? 'bg-amber-600 text-white ring-2 ring-amber-400' 
+                                  : 'bg-amber-600/30 text-amber-400 hover:bg-amber-600/50'
+                              }`}
+                            >
+                              Middle
+                              <div className="text-[8px] opacity-80">40</div>
+                            </button>
+                            <button
+                              onClick={() => setPredefinedPoints(0)}
+                              className={`py-1.5 px-1 text-[10px] font-bold rounded ${
+                                currentPoints === '0' 
+                                  ? 'bg-green-600 text-white ring-2 ring-green-400' 
+                                  : 'bg-green-600/30 text-green-400 hover:bg-green-600/50'
+                              }`}
+                            >
+                              Valid
+                              <div className="text-[8px] opacity-80">0</div>
+                            </button>
+                            <button
+                              onClick={() => setPredefinedPoints(80)}
+                              className={`py-1.5 px-1 text-[10px] font-bold rounded ${
+                                currentPoints === '80' 
+                                  ? 'bg-red-600 text-white ring-2 ring-red-400' 
+                                  : 'bg-red-600/30 text-red-400 hover:bg-red-600/50'
+                              }`}
+                            >
+                              Wrong
+                              <div className="text-[8px] opacity-80">80</div>
+                            </button>
+                          </div>
                         </div>
                       )}
                       
-                      {/* Card Points Input */}
+                      {/* Card Points Input with Validation */}
                       {isOperatorOrAdmin && !isEliminated && currentPhase !== 'SETUP' && (
-                        <div className="mt-2 flex gap-2">
-                          <input
-                            type="number"
-                            min="0"
-                            max="200"
-                            placeholder="Card pts"
-                            className="flex-1 px-2 py-1 bg-slate-700 border border-slate-600 rounded text-white text-xs"
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                sendGameAction('RECORD_CARD_POINTS', { playerId: p.id, points: parseInt(e.target.value) });
-                                e.target.value = '';
-                              }
-                            }}
-                          />
-                          <button
-                            onClick={(e) => {
-                              const input = e.target.previousElementSibling;
-                              sendGameAction('RECORD_CARD_POINTS', { playerId: p.id, points: parseInt(input.value) });
-                              input.value = '';
-                            }}
-                            className="px-2 py-1 bg-violet-600 text-white text-xs rounded hover:bg-violet-700"
-                          >
-                            Add
-                          </button>
+                        <div className="mt-3">
+                          <div className="flex gap-2">
+                            <input
+                              type="number"
+                              min="0"
+                              max="200"
+                              value={currentPoints}
+                              placeholder="Enter points *"
+                              className="flex-1 px-3 py-2 bg-slate-700 border-2 border-slate-600 rounded-lg text-white text-sm font-bold focus:border-orange-500 focus:outline-none"
+                              onChange={(e) => handlePointsChange(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  handleRecordPoints();
+                                }
+                              }}
+                            />
+                            <button
+                              onClick={handleRecordPoints}
+                              disabled={!currentPoints || parseInt(currentPoints) < 0}
+                              className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-1 ${
+                                currentPoints && parseInt(currentPoints) >= 0
+                                  ? 'bg-violet-600 hover:bg-violet-700 text-white'
+                                  : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                              }`}
+                            >
+                              <Check size={16} />
+                              Add
+                            </button>
+                          </div>
+                          {!currentPoints && (
+                            <div className="text-xs text-orange-400 mt-1 flex items-center gap-1">
+                              <AlertCircle size={12} />
+                              Points required - click a button above or enter manually
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
