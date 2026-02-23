@@ -1,4 +1,4 @@
-# Local Development Setup Guide (PostgreSQL)
+op# Local Development Setup Guide (PostgreSQL)
 
 Complete guide for local development with PostgreSQL - test everything before committing!
 
