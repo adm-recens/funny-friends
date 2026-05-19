@@ -172,6 +172,11 @@ const GameSession = () => {
         }
         setSideShowRequest(state.sideShowRequest || null);
         setShowRequest(state.showRequest || null);
+        
+        // Show recovery notification
+        if (state.recoveredFromCrash) {
+          toast.info('Session was recovered from server restart. Hands were reset for security. You may continue or start a new round.');
+        }
       }
     };
 
@@ -425,6 +430,18 @@ const GameSession = () => {
     }
   };
 
+  const handleRemovePlayer = (playerId, playerName) => {
+    if (!confirm(`Are you sure you want to remove ${playerName} from the game?`)) {
+      return;
+    }
+    socket.emit('game_action', {
+      sessionName: decodeURIComponent(sessionName),
+      type: 'REMOVE_PLAYER',
+      playerId
+    });
+    toast.info(`${playerName} has been removed from the game`);
+  };
+
   const getPhaseBadgeColor = (phase) => {
     switch (phase?.toUpperCase()) {
       case 'ACTIVE':
@@ -650,6 +667,15 @@ const GameSession = () => {
                           <div className="text-xs text-slate-400">Seat {player.seat || index + 1}</div>
                         </div>
                       </div>
+                      {isOperatorOrAdmin && (
+                        <button
+                          onClick={() => handleRemovePlayer(player.id, player.name)}
+                          className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded-md transition-colors"
+                          title="Remove player"
+                        >
+                          <X size={16} />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -871,11 +897,16 @@ const GameSession = () => {
                         <span className={`font-bold text-lg ${isTPActive ? 'text-white' : 'text-slate-400'}`}>{p.name}</span>
                         <span className="text-xs text-slate-500">Seat {p.seat}</span>
                       </div>
-                      {!p.folded && (
+                      {!p.folded && p.status !== 'LEFT' && (
                         <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase ${
                           p.status === 'BLIND' ? 'bg-slate-700 text-slate-400' : 'bg-blue-900 text-blue-300'
                         }`}>
                           {p.status}
+                        </span>
+                      )}
+                      {p.status === 'LEFT' && (
+                        <span className="text-[10px] font-bold px-2 py-1 rounded uppercase bg-red-900 text-red-300">
+                          LEFT
                         </span>
                       )}
                     </div>
@@ -884,6 +915,15 @@ const GameSession = () => {
                       <div className="text-slate-400 text-xs uppercase tracking-wider mb-1">Invested</div>
                       <div className="font-mono text-xl text-yellow-500/80">{p.invested}</div>
                     </div>
+
+                    {isOperatorOrAdmin && currentPhase !== 'SETUP' && p.status !== 'LEFT' && (
+                      <button
+                        onClick={() => handleRemovePlayer(p.id, p.name)}
+                        className="mt-3 w-full py-1.5 bg-red-600/20 hover:bg-red-600/40 border border-red-500/30 text-red-400 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-colors"
+                      >
+                        <X size={12} /> Remove
+                      </button>
+                    )}
 
                     {isTPActive && !p.folded && (
                       <>

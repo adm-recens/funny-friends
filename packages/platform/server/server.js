@@ -64,6 +64,92 @@ const approvedViewers = new Map(); // sessionName -> Set of socket IDs
 // Export prisma for use in controllers
 // module.exports moved to end of file
 
+// --- SNAPSHOT PERSISTENCE HELPER ---
+async function saveSnapshot(sessionName, manager) {
+  if (!manager || !manager.getSnapshot) return;
+  try {
+    const snapshot = manager.getSnapshot();
+    await prisma.gameSession.update({
+      where: { name: sessionName },
+      data: {
+        snapshot: JSON.stringify(snapshot),
+        lastActivityAt: new Date()
+      }
+    });
+  } catch (e) {
+    console.error(`[ERROR] Failed to save snapshot for ${sessionName}:`, e.message);
+  }
+}
+
+async function clearSnapshot(sessionName) {
+  try {
+    await prisma.gameSession.update({
+      where: { name: sessionName },
+      data: { snapshot: null }
+    });
+  } catch (e) {
+    console.error(`[ERROR] Failed to clear snapshot for ${sessionName}:`, e.message);
+  }
+}
+
+// --- ORPHANED SESSION CLEANUP ---
+setInterval(async () => {
+  try {
+    const now = Date.now();
+    const STALE_SESSION_MS = 2 * 60 * 60 * 1000; // 2 hours
+    const STALE_VIEWER_MS = 60 * 60 * 1000; // 1 hour
+
+    // Clean up activeSessions entries for sessions that are no longer active in DB
+    for (const [name, manager] of activeSessions.entries()) {
+      // Check if manager has been inactive for too long
+      const isInactive = !manager.isActive || manager.gameState?.phase === 'ENDED';
+      if (isInactive) {
+        console.log(`[CLEANUP] Removing inactive manager from memory: ${name}`);
+        activeSessions.delete(name);
+        clearSnapshot(name).catch(() => {});
+        continue;
+      }
+
+      // Check DB for stale sessions
+      const dbSession = await prisma.gameSession.findUnique({
+        where: { name },
+        select: { isActive: false, lastActivityAt: true }
+      });
+      if (!dbSession || !dbSession.isActive) {
+        console.log(`[CLEANUP] Removing stale session from memory: ${name}`);
+        activeSessions.delete(name);
+        clearSnapshot(name).catch(() => {});
+      } else if (dbSession.lastActivityAt) {
+        const lastActivity = new Date(dbSession.lastActivityAt).getTime();
+        if (now - lastActivity > STALE_SESSION_MS) {
+          console.log(`[CLEANUP] Session ${name} stale for ${Math.round((now - lastActivity) / 60000)}min, cleaning up`);
+          activeSessions.delete(name);
+          clearSnapshot(name).catch(() => {});
+        }
+      }
+    }
+
+    // Clean up old pending viewer requests
+    for (const [sessionName, requests] of pendingViewerRequests.entries()) {
+      const filtered = requests.filter(r => now - r.timestamp < STALE_VIEWER_MS);
+      if (filtered.length === 0) {
+        pendingViewerRequests.delete(sessionName);
+      } else if (filtered.length !== requests.length) {
+        pendingViewerRequests.set(sessionName, filtered);
+      }
+    }
+
+    // Clean up approved viewers for sessions no longer in activeSessions
+    for (const sessionName of approvedViewers.keys()) {
+      if (!activeSessions.has(sessionName)) {
+        approvedViewers.delete(sessionName);
+      }
+    }
+  } catch (e) {
+    console.error('[ERROR] Orphaned session cleanup failed:', e);
+  }
+}, 15 * 60 * 1000); // Run every 15 minutes
+
 // ALLOW CONNECTION FROM ANYWHERE (For simplicity)
 // ALLOW CONNECTION FROM ANYWHERE (For simplicity)
 const CLIENT_URL = process.env.CLIENT_URL || "https://teen-patti-client.onrender.com";
@@ -1515,6 +1601,8 @@ app.post('/api/admin/sessions/:name/end', requireOperator, async (req, res) => {
     if (activeSessions.has(name)) {
       activeSessions.delete(name);
     }
+    
+    clearSnapshot(name).catch(() => {});
 
     io.to(name).emit('session_ended', { reason: 'ADMIN_ENDED' });
 
@@ -1994,7 +2082,8 @@ async function initializeGameManager(sessionName) {
       const dbSession = await prisma.gameSession.findUnique({ where: { name: sessionName } });
       
       if (!dbSession || !dbSession.isActive) {
-        throw new Error(`Session ${sessionName} not found or inactive`);
+        console.log(`[DEBUG] Session ${sessionName} not found or inactive`);
+        return null;
       }
       
       const dbPlayers = await prisma.player.findMany({ where: { sessionId: dbSession.id } });
@@ -2031,6 +2120,19 @@ async function initializeGameManager(sessionName) {
       newManager.currentRound = dbSession.currentRound || 1;
       newManager.setPlayers(initialPlayers);
       
+      // Restore snapshot if available (crash recovery)
+      if (dbSession.snapshot) {
+        try {
+          const snapshot = typeof dbSession.snapshot === 'string' ? JSON.parse(dbSession.snapshot) : dbSession.snapshot;
+          if (snapshot.gameState && snapshot.gameState.phase !== 'SETUP' && snapshot.gameState.phase !== 'ENDED') {
+            newManager.restoreSnapshot(snapshot);
+            console.log(`[DEBUG] Restored active game state for ${sessionName} from snapshot (phase: ${snapshot.gameState.phase})`);
+          }
+        } catch (e) {
+          console.error(`[ERROR] Failed to restore snapshot for ${sessionName}:`, e);
+        }
+      }
+      
       // Hook up events
       newManager.on('state_change', (state) => {
         io.to(sessionName).emit('game_update', state);
@@ -2045,6 +2147,9 @@ async function initializeGameManager(sessionName) {
             }
           });
         }
+        
+        // Persist snapshot for crash recovery
+        saveSnapshot(sessionName, newManager);
       });
       
       newManager.on('hand_complete', async (summary) => {
@@ -2080,6 +2185,9 @@ async function initializeGameManager(sessionName) {
         }
         
         io.to(sessionName).emit('game_update', { type: 'HAND_COMPLETE', ...summary });
+        
+        // Clear snapshot since hand is complete
+        clearSnapshot(sessionName);
       });
       
       // Rummy uses round_complete instead of hand_complete
@@ -2121,6 +2229,9 @@ async function initializeGameManager(sessionName) {
         }
         
         io.to(sessionName).emit('game_update', { type: 'ROUND_COMPLETE', ...summary });
+        
+        // Clear snapshot since round is complete
+        clearSnapshot(sessionName);
       });
       
       newManager.on('session_ended', async (data) => {
@@ -2136,6 +2247,9 @@ async function initializeGameManager(sessionName) {
         
         io.to(sessionName).emit('session_ended', data);
         activeSessions.delete(sessionName);
+        
+        // Clear snapshot since session has ended
+        clearSnapshot(sessionName);
       });
       
       activeSessions.set(sessionName, newManager);
@@ -2213,158 +2327,19 @@ io.on('connection', (socket) => {
 
       let manager = activeSessions.get(sessionName);
 
-      // Check if session is currently loading
-      if (sessionLoaders.has(sessionName)) {
-        console.log(`[DEBUG] Session ${sessionName} is currently loading, waiting...`);
+      if (!manager) {
         try {
-          manager = await sessionLoaders.get(sessionName);
+          manager = await initializeGameManager(sessionName);
         } catch (e) {
-          console.error(`[ERROR] Failed to wait for session load:`, e);
+          console.error(`[ERROR] Failed to initialize session ${sessionName}:`, e);
           return socket.emit('error_message', "Failed to join session");
         }
-      }
-
-      if (!manager) {
-        // Start loading process
-        const loadPromise = (async () => {
+        
+        if (!manager) {
+          // Session is ended or not found - fetch final state from DB
           try {
-            console.log(`[DEBUG] Starting DB load for session ${sessionName}`);
             const dbSession = await prisma.gameSession.findUnique({ where: { name: sessionName } });
-
-            if (dbSession && dbSession.isActive) {
-              const dbPlayers = await prisma.player.findMany({ where: { sessionId: dbSession.id } });
-              const initialPlayers = dbPlayers.map(p => ({
-                id: p.id,
-                name: p.name,
-                sessionBalance: p.sessionBalance,
-                score: p.score || p.sessionBalance, // Use score for Rummy, fallback to sessionBalance
-                seat: p.seatPosition,
-                status: p.status || 'PLAYING'
-              }));
-
-              // Get game type to determine which GameManager to use
-              const gameType = await prisma.gameType.findUnique({ 
-                where: { id: dbSession.gameTypeId },
-                select: { code: true }
-              });
-              
-              let newManager;
-              
-              // Determine game configuration based on game type
-              const gameConfig = {
-                sessionId: dbSession.id,
-                sessionName: sessionName,
-                gameLimitType: dbSession.gameLimitType || 'rounds',
-                totalRounds: dbSession.totalRounds,
-                targetScore: dbSession.targetScore
-              };
-              
-              if (gameType?.code === 'rummy' && RummyGameManager) {
-                newManager = new RummyGameManager(gameConfig);
-              } else {
-                // Default to Teen Patti
-                newManager = new TeenPattiGameManager(gameConfig);
-              }
-              newManager.currentRound = dbSession.currentRound || 1;
-              newManager.setPlayers(initialPlayers);
-              console.log(`[DEBUG] Restored session ${sessionName} from DB with ${initialPlayers.length} players`);
-
-              // Hook up events (Ensure hooks are only added ONCE)
-              // Note: Using a persistent manager means events persist.
-              newManager.on('state_change', (state) => {
-                // Emit to all players and operators in the session
-                io.to(sessionName).emit('game_update', state);
-                
-                // Also emit to approved viewers
-                const approved = approvedViewers.get(sessionName);
-                if (approved) {
-                  approved.forEach(socketId => {
-                    const viewerSocket = io.sockets.sockets.get(socketId);
-                    if (viewerSocket) {
-                      viewerSocket.emit('game_update', state);
-                    }
-                  });
-                }
-              });
-              newManager.on('hand_complete', async (summary) => {
-                // Save hand to database
-                try {
-                  const session = await prisma.gameSession.findUnique({ where: { name: sessionName } });
-                  if (session) {
-                    // Save hand history
-                    await prisma.gameHand.create({
-                      data: {
-                        winner: summary.winner.name,
-                        potSize: summary.pot,
-                        logs: JSON.stringify(summary.logs || []),
-                        sessionId: session.id
-                      }
-                    });
-
-                    // Update player balances/scores
-                    if (summary.netChanges) {
-                      for (const [playerId, change] of Object.entries(summary.netChanges)) {
-                        const pid = parseInt(playerId);
-                        // Update based on game type - check if score field exists (Rummy) or sessionBalance (Teen Patti)
-                        // For Rummy, change is the new total score
-                        // For Teen Patti, change is the increment to add
-                        const player = await prisma.player.findUnique({ where: { id: pid } });
-                        if (player && player.score !== undefined) {
-                          // Rummy - set absolute score
-                          await prisma.player.update({
-                            where: { id: pid },
-                            data: {
-                              score: change,
-                              status: change >= (gameConfig.targetScore || 100) + 1 ? 'ELIMINATED' : 'PLAYING'
-                            }
-                          });
-                        } else {
-                          // Teen Patti - increment
-                          await prisma.player.update({
-                            where: { id: pid },
-                            data: {
-                              sessionBalance: { increment: change }
-                            }
-                          });
-                        }
-                      }
-                    }
-
-                    // Update current round in GameSession
-                    await prisma.gameSession.update({
-                      where: { id: session.id },
-                      data: { currentRound: summary.currentRound }
-                    });
-                  }
-                } catch (e) {
-                  console.error('[ERROR] Failed to save hand persistence:', e);
-                }
-
-                io.to(sessionName).emit('game_update', { type: 'HAND_COMPLETE', ...summary });
-              });
-              newManager.on('session_ended', async (data) => {
-                // Mark session as inactive in database
-                try {
-                  await prisma.gameSession.update({
-                    where: { name: sessionName },
-                    data: { isActive: false }
-                  });
-                  console.log(`[DEBUG] Session ${sessionName} marked as complete`);
-                } catch (e) {
-                  console.error('[ERROR] Failed to mark session as complete:', e);
-                }
-
-                io.to(sessionName).emit('session_ended', data);
-                activeSessions.delete(sessionName);
-              });
-
-              activeSessions.set(sessionName, newManager);
-              console.log(`Initialized GameManager for ${sessionName}`);
-              return newManager;
-            } else {
-              // Session exists but is inactive (ended) - return session info for display
-              console.log(`[DEBUG] Session ${sessionName} is ended, returning final state`);
-              // Fetch players from database for ended session
+            if (dbSession) {
               const endedSessionPlayers = await prisma.player.findMany({ where: { sessionId: dbSession.id } });
               const finalPlayersList = endedSessionPlayers.map(p => ({
                 id: p.id,
@@ -2374,39 +2349,17 @@ io.on('connection', (socket) => {
                 seat: p.seatPosition,
                 status: p.status || 'PLAYING'
               }));
-              return { 
-                isEnded: true, 
+              return socket.emit('session_ended', { 
+                reason: 'SESSION_COMPLETE',
                 finalRound: dbSession.currentRound,
                 totalRounds: dbSession.totalRounds,
                 finalPlayers: finalPlayersList
-              };
+              });
             }
           } catch (e) {
-            console.error("Restore Error:", e);
-            throw e;
-          } finally {
-            sessionLoaders.delete(sessionName);
+            console.error('[ERROR] Failed to load ended session:', e);
           }
-        })();
-
-        sessionLoaders.set(sessionName, loadPromise);
-
-        try {
-          manager = await loadPromise;
-          if (!manager) {
-            return socket.emit('error_message', "Session not found or inactive");
-          }
-          // Check if it's an ended session info object
-          if (manager.isEnded) {
-            return socket.emit('session_ended', { 
-              reason: 'SESSION_COMPLETE',
-              finalRound: manager.finalRound,
-              totalRounds: manager.totalRounds,
-              finalPlayers: manager.finalPlayers
-            });
-          }
-        } catch (e) {
-          return socket.emit('error_message', "Internal server error during session load");
+          return socket.emit('error_message', "Session not found or inactive");
         }
       }
 
@@ -2437,225 +2390,72 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Game Actions
+  // Game Actions - Refactored with clean dispatch
   socket.on('game_action', (action) => {
-    // Validate action object
     if (!action || typeof action !== 'object') {
-      console.log('[DEBUG] Invalid action received:', action);
-      socket.emit('error_message', 'Invalid action format');
-      return;
+      return socket.emit('error_message', 'Invalid action format');
     }
     
     console.log('[DEBUG] game_action received:', action.type, 'for session:', action.sessionName);
+    
     if (!isOperatorOrAdmin()) {
       console.log('[DEBUG] Unauthorized - user role:', socket.user.role);
-      return;
+      return socket.emit('error_message', 'Unauthorized');
     }
 
     const manager = activeSessions.get(action.sessionName);
     if (!manager) {
-      console.log('[DEBUG] No manager found for session:', action.sessionName);
-      return;
+      return socket.emit('error_message', 'Session not found or inactive');
     }
 
-    console.log('[DEBUG] Manager found. Current phase:', manager.gameState.phase, 'Players:', manager.gameState.players.length);
-
-    if (action.type === 'START_ROUND' || action.type === 'START_GAME') {
-      console.log('[DEBUG] Calling startRound()');
-      const result = manager.startRound();
-      console.log('[DEBUG] startRound result:', result);
-      if (!result.success) socket.emit('error_message', result.error);
-    } else if (action.type === 'NEXT_ROUND') {
-      console.log('[DEBUG] Moving to next round');
-      const result = manager.startRound();
-      if (!result.success) socket.emit('error_message', result.error);
-    } else if (action.type === 'END_SESSION') {
-      console.log('[DEBUG] Ending session');
-      manager.endSession();
-      activeSessions.delete(action.sessionName);
-    } else if (action.type === 'CANCEL_SIDE_SHOW') {
-      // F1 FIX: Handle cancel side show (Teen Patti only)
-      if (manager.cancelSideShow) {
-        const result = manager.cancelSideShow();
-        if (!result.success) socket.emit('error_message', result.error);
-      }
-    } else if (action.type === 'CANCEL_SHOW') {
-      // F1 FIX: Handle cancel show (Teen Patti only)
-      if (manager.cancelShow) {
-        const result = manager.cancelShow();
-        if (!result.success) socket.emit('error_message', result.error);
-      }
-    } else if (action.type === 'DRAW_CARD') {
-      // Rummy specific
-      if (manager.drawCard) {
+    // Special actions that bypass generic handleAction
+    const specialHandlers = {
+      'START_ROUND': () => manager.startRound(),
+      'START_GAME': () => manager.startRound(),
+      'NEXT_ROUND': () => manager.startRound(),
+      'END_SESSION': () => {
+        manager.endSession();
+        activeSessions.delete(action.sessionName);
+        return { success: true };
+      },
+      'CANCEL_SIDE_SHOW': () => manager.cancelSideShow 
+        ? manager.cancelSideShow() 
+        : { success: false, error: 'Not supported' },
+      'CANCEL_SHOW': () => manager.cancelShow 
+        ? manager.cancelShow() 
+        : { success: false, error: 'Not supported' },
+      'DRAW_CARD': () => {
+        if (!manager.drawCard) return { success: false, error: 'Not supported' };
         const result = manager.drawCard(socket.user.id, action.source);
         if (result.success) {
-          // Send player their hand
           const handData = manager.getPlayerHand(socket.user.id);
           socket.emit('player_hand', handData);
-        } else {
-          socket.emit('error_message', result.error);
         }
+        return result;
+      },
+      'REMOVE_PLAYER': () => {
+        if (!manager.removePlayer) return { success: false, error: 'Not supported' };
+        return manager.removePlayer(action.playerId);
       }
-    } else if (action.type === 'RECORD_INITIAL_DROP') {
-      // Rummy: Player drops before first draw = 20 points
-      if (manager.handleAction) {
-        const result = manager.handleAction(action);
-        if (!result.success) socket.emit('error_message', result.error);
+    };
+
+    let result;
+    if (specialHandlers[action.type]) {
+      result = specialHandlers[action.type]();
+    } else if (manager.handleAction) {
+      // Normalize legacy actions
+      const normalizedAction = { ...action };
+      if (action.type === 'RECORD_DROP' && !action.dropType) {
+        normalizedAction.dropType = 'initial';
       }
-    } else if (action.type === 'RECORD_MIDDLE_DROP') {
-      // Rummy: Player drops after playing = 40 points
-      if (manager.handleAction) {
-        const result = manager.handleAction(action);
-        if (!result.success) socket.emit('error_message', result.error);
-      }
-    } else if (action.type === 'RECORD_VALID_SHOW') {
-      // Rummy: Valid rummy declaration = 0 points, round ends
-      if (manager.handleAction) {
-        const result = manager.handleAction(action);
-        if (!result.success) socket.emit('error_message', result.error);
-      }
-    } else if (action.type === 'RECORD_WRONG_SHOW') {
-      // Rummy: Wrong show = 80 points penalty, round ends
-      if (manager.handleAction) {
-        const result = manager.handleAction(action);
-        if (!result.success) socket.emit('error_message', result.error);
-      }
-    } else if (action.type === 'RECORD_CARD_POINTS') {
-      // Rummy: Record card points for player
-      if (manager.handleAction) {
-        const result = manager.handleAction(action);
-        if (!result.success) socket.emit('error_message', result.error);
-      }
-    } else if (action.type === 'RECORD_POINTS') {
-      // Legacy: Rummy record points
-      if (manager.handleAction) {
-        const result = manager.handleAction(action);
-        if (!result.success) socket.emit('error_message', result.error);
-      }
-    } else if (action.type === 'RECORD_DROP') {
-      // Legacy: Rummy record drop
-      if (manager.handleAction) {
-        const result = manager.handleAction({
-          type: 'RECORD_DROP',
-          playerId: action.playerId,
-          dropType: action.dropType || 'initial'
-        });
-        if (!result.success) socket.emit('error_message', result.error);
-      }
-    } else if (action.type === 'RECORD_WINNER') {
-      // Ledger: Record round winner
-      if (manager.handleAction) {
-        const result = manager.handleAction(action);
-        if (!result.success) socket.emit('error_message', result.error);
-      }
-    } else if (action.type === 'END_ROUND') {
-      // Rummy: End current round
-      if (manager.handleAction) {
-        const result = manager.handleAction(action);
-        if (!result.success) socket.emit('error_message', result.error);
-      }
-    } else if (action.type === 'ELIMINATE_PLAYER') {
-      // Rummy Ledger: Eliminate a player
-      if (manager.handleAction) {
-        const result = manager.handleAction(action);
-        if (!result.success) socket.emit('error_message', result.error);
-      }
-    } else if (action.type === 'ADD_TO_POT') {
-      // Teen Patti Ledger: Add to pot
-      if (manager.handleAction) {
-        const result = manager.handleAction(action);
-        if (!result.success) socket.emit('error_message', result.error);
-      }
-    } else if (action.type === 'RESET_ROUND') {
-      // Reset current round
-      if (manager.handleAction) {
-        const result = manager.handleAction(action);
-        if (!result.success) socket.emit('error_message', result.error);
-      }
-    } else if (action.type === 'FOLD') {
-      // Teen Patti: Fold action
-      console.log('[DEBUG] Processing FOLD action for player:', action.playerId);
-      if (manager.handleAction) {
-        const result = manager.handleAction({
-          type: 'FOLD',
-          playerId: action.playerId
-        });
-        if (!result.success) socket.emit('error_message', result.error);
-      }
-    } else if (action.type === 'SEEN') {
-      // Teen Patti: See cards action
-      console.log('[DEBUG] Processing SEEN action for player:', action.playerId);
-      if (manager.handleAction) {
-        const result = manager.handleAction({
-          type: 'SEEN',
-          playerId: action.playerId
-        });
-        if (!result.success) socket.emit('error_message', result.error);
-      }
-    } else if (action.type === 'BET') {
-      // Teen Patti: Bet action
-      console.log('[DEBUG] Processing BET action:', action.amount, 'isDouble:', action.isDouble);
-      if (manager.handleAction) {
-        const result = manager.handleAction({
-          type: 'BET',
-          playerId: action.playerId,
-          amount: action.amount,
-          isDouble: action.isDouble
-        });
-        if (!result.success) socket.emit('error_message', result.error);
-      }
-    } else if (action.type === 'SIDE_SHOW_REQUEST') {
-      // Teen Patti: Side show request
-      console.log('[DEBUG] Processing SIDE_SHOW_REQUEST from:', action.playerId, 'to:', action.targetId);
-      if (manager.handleAction) {
-        const result = manager.handleAction({
-          type: 'SIDE_SHOW_REQUEST',
-          playerId: action.playerId,
-          targetId: action.targetId
-        });
-        if (!result.success) socket.emit('error_message', result.error);
-      }
-    } else if (action.type === 'SIDE_SHOW_RESOLVE') {
-      // Teen Patti: Side show resolve
-      console.log('[DEBUG] Processing SIDE_SHOW_RESOLVE winner:', action.winnerId);
-      if (manager.handleAction) {
-        const result = manager.handleAction({
-          type: 'SIDE_SHOW_RESOLVE',
-          winnerId: action.winnerId
-        });
-        if (!result.success) socket.emit('error_message', result.error);
-      }
-    } else if (action.type === 'SHOW') {
-      // Teen Patti: Show/Force Show request
-      console.log('[DEBUG] Processing SHOW action from:', action.playerId, 'target:', action.targetId);
-      if (manager.handleAction) {
-        const result = manager.handleAction({
-          type: 'SHOW',
-          playerId: action.playerId,
-          targetId: action.targetId
-        });
-        if (!result.success) socket.emit('error_message', result.error);
-      }
-    } else if (action.type === 'SHOW_RESOLVE') {
-      // Teen Patti: Show resolve
-      console.log('[DEBUG] Processing SHOW_RESOLVE winner:', action.winnerId);
-      if (manager.handleAction) {
-        const result = manager.handleAction({
-          type: 'SHOW_RESOLVE',
-          winnerId: action.winnerId
-        });
-        if (!result.success) socket.emit('error_message', result.error);
-      }
+      console.log(`[DEBUG] Passing ${action.type} to manager.handleAction`);
+      result = manager.handleAction(normalizedAction);
     } else {
-      // Default: pass to manager's handleAction
-      console.log('[DEBUG] Unhandled action type:', action.type, '- passing to manager.handleAction');
-      if (manager.handleAction) {
-        const result = manager.handleAction(action);
-        if (!result.success) socket.emit('error_message', result.error);
-      } else {
-        socket.emit('error_message', 'Game manager does not support this action');
-      }
+      result = { success: false, error: 'Game manager does not support this action' };
+    }
+
+    if (result && !result.success) {
+      socket.emit('error_message', result.error);
     }
   });
 
@@ -2697,6 +2497,7 @@ io.on('connection', (socket) => {
           manager.endSession();
         }
         activeSessions.delete(sessionName);
+        clearSnapshot(sessionName).catch(() => {});
       } else {
         // Fetch players from database if manager not in memory
         const dbPlayers = await prisma.player.findMany({ where: { sessionId: session.id } });
@@ -2732,6 +2533,22 @@ io.on('connection', (socket) => {
     if (!sessionName || !name) {
       socket.emit('error_message', 'Session name and viewer name are required');
       return;
+    }
+
+    // Rate limiting per socket
+    const now = Date.now();
+    const limit = viewerRequestLimits.get(socket.id);
+    if (limit) {
+      if (now > limit.resetTime) {
+        viewerRequestLimits.set(socket.id, { count: 1, resetTime: now + VIEWER_REQUEST_WINDOW_MS });
+      } else if (limit.count >= VIEWER_REQUEST_MAX) {
+        socket.emit('error_message', 'Too many access requests. Please wait a minute.');
+        return;
+      } else {
+        limit.count++;
+      }
+    } else {
+      viewerRequestLimits.set(socket.id, { count: 1, resetTime: now + VIEWER_REQUEST_WINDOW_MS });
     }
 
     // D2 FIX: Validate that session exists and is active
@@ -2851,6 +2668,19 @@ io.on('connection', (socket) => {
     }
   });
 
+  const viewerRequestLimits = new Map(); // socketId -> { count, resetTime }
+  const VIEWER_REQUEST_WINDOW_MS = 60 * 1000; // 1 minute
+  const VIEWER_REQUEST_MAX = 3; // max 3 requests per minute
+
+  // ... existing code ...
+
+  socket.on('leave_session', ({ sessionName }) => {
+    if (sessionName) {
+      socket.leave(sessionName);
+      console.log(`[DEBUG] Socket ${socket.id} left session ${sessionName}`);
+    }
+  });
+
   socket.on('disconnect', () => {
     // Cleanup viewer requests
     for (const [sessionName, requests] of pendingViewerRequests.entries()) {
@@ -2872,6 +2702,9 @@ io.on('connection', (socket) => {
         }
       }
     }
+
+    // Cleanup rate limit tracking
+    viewerRequestLimits.delete(socket.id);
   });
 });
 

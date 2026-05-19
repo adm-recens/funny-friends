@@ -104,7 +104,8 @@ class GameManager extends EventEmitter {
             showRequest: null,
             gameLimitType: this.gameLimitType,
             totalRounds: this.totalRounds,
-            targetScore: this.targetScore
+            targetScore: this.targetScore,
+            recoveredFromCrash: false
         };
         
         this.requestTimeouts = new Map();
@@ -134,7 +135,7 @@ class GameManager extends EventEmitter {
     setPlayers(initialPlayers) {
         this.gameState.players = initialPlayers.map(p => ({
             ...p,
-            status: 'BLIND',
+            status: p.status || 'BLIND',
             folded: false,
             invested: 0
         }));
@@ -155,8 +156,59 @@ class GameManager extends EventEmitter {
     }
 
     removePlayer(playerId) {
-        if (this.gameState.phase !== 'SETUP') return false;
-        this.gameState.players = this.gameState.players.filter(p => p.id !== playerId);
+        // Find player in the main players array
+        const playerIndex = this.gameState.players.findIndex(p => p.id === playerId);
+        if (playerIndex === -1) return false;
+        
+        const player = this.gameState.players[playerIndex];
+        
+        if (this.gameState.phase === 'SETUP') {
+            // Simple removal during setup
+            this.gameState.players.splice(playerIndex, 1);
+            // Also remove from gamePlayers if present
+            this.gameState.gamePlayers = this.gameState.gamePlayers.filter(p => p.id !== playerId);
+            this.emit('state_change', this.getPublicState());
+            return true;
+        }
+        
+        // ACTIVE phase: mark as LEFT and fold immediately
+        player.status = 'LEFT';
+        player.folded = true;
+        
+        // Also mark in gamePlayers if present
+        const gamePlayer = this.gameState.gamePlayers.find(p => p.id === playerId);
+        if (gamePlayer) {
+            gamePlayer.status = 'LEFT';
+            gamePlayer.folded = true;
+        }
+        
+        this.gameState.currentLogs.push(`${player.name} left the game. Their invested amount stays in the pot.`);
+        
+        // Check if only one player remains active
+        const remaining = this.gameState.gamePlayers.filter(p => !p.folded && p.status !== 'LEFT');
+        if (remaining.length === 1) {
+            this.endHand(remaining[0]);
+        } else if (remaining.length === 0) {
+            // Edge case: everyone left, end hand with no winner (pot stays for next round)
+            this.gameState.currentLogs.push('All players have left. Hand ends with no winner.');
+            this.gameState.phase = 'SHOWDOWN';
+            this.emit('hand_complete', {
+                winner: null,
+                pot: this.gameState.pot,
+                netChanges: {},
+                currentRound: this.currentRound,
+                isSessionOver: this.currentRound > this.totalRounds
+            });
+            this.currentRound++;
+        } else {
+            // If the removed player was the active player, rotate turn
+            const activePlayer = this.gameState.gamePlayers[this.gameState.activePlayerIndex];
+            if (!activePlayer || activePlayer.id === playerId || activePlayer.folded || activePlayer.status === 'LEFT') {
+                this.gameState.activePlayerIndex = this.getNextActiveIndex(this.gameState.activePlayerIndex);
+            }
+            this.emit('state_change', this.getPublicState());
+        }
+        
         return true;
     }
 
@@ -168,7 +220,13 @@ class GameManager extends EventEmitter {
             return { success: false, error: "Session complete" };
         }
         
-        const validPlayers = this.gameState.players.filter(p => p.name && p.name.trim() !== '');
+        // Filter out players who have LEFT or are eliminated
+        const validPlayers = this.gameState.players.filter(p => {
+            const nameValid = p.name && p.name.trim() !== '';
+            const statusValid = p.status !== 'LEFT' && p.status !== 'ELIMINATED';
+            return nameValid && statusValid;
+        });
+        
         console.log('[DEBUG] Valid players:', validPlayers.length, validPlayers);
         
         if (validPlayers.length < 2) return { success: false, error: "Not enough players" };
@@ -295,6 +353,7 @@ class GameManager extends EventEmitter {
         if (target.folded) return { success: false, error: "Cannot Side Show with folded player" };
         if (target.status === 'BLIND') return { success: false, error: "Cannot Side Show with Blind player" };
         if (target.id === player.id) return { success: false, error: "Cannot request Side Show with yourself" };
+        if (target.status === 'LEFT') return { success: false, error: "Cannot Side Show with a player who left" };
 
         const cost = this.gameState.currentStake;
         player.invested += cost;
@@ -502,7 +561,7 @@ class GameManager extends EventEmitter {
     }
 
     getNextActiveIndex(currentIndex) {
-        const activePlayers = this.gameState.gamePlayers.filter(p => !p.folded);
+        const activePlayers = this.gameState.gamePlayers.filter(p => !p.folded && p.status !== 'LEFT');
         if (activePlayers.length === 0) return currentIndex;
         if (activePlayers.length === 1) {
             return this.gameState.gamePlayers.findIndex(p => p.id === activePlayers[0].id);
@@ -511,7 +570,7 @@ class GameManager extends EventEmitter {
         let next = (currentIndex + 1) % this.gameState.gamePlayers.length;
         let p = this.gameState.gamePlayers[next];
         let attempts = 0;
-        while (p.folded && attempts < this.gameState.gamePlayers.length) {
+        while ((p.folded || p.status === 'LEFT') && attempts < this.gameState.gamePlayers.length) {
             next = (next + 1) % this.gameState.gamePlayers.length;
             p = this.gameState.gamePlayers[next];
             attempts++;
@@ -520,7 +579,7 @@ class GameManager extends EventEmitter {
     }
 
     getPreviousActiveIndex(currentIndex) {
-        const activePlayers = this.gameState.gamePlayers.filter(p => !p.folded);
+        const activePlayers = this.gameState.gamePlayers.filter(p => !p.folded && p.status !== 'LEFT');
         if (activePlayers.length === 0) return currentIndex;
         if (activePlayers.length === 1) {
             return this.gameState.gamePlayers.findIndex(p => p.id === activePlayers[0].id);
@@ -529,7 +588,7 @@ class GameManager extends EventEmitter {
         let prev = (currentIndex - 1 + this.gameState.gamePlayers.length) % this.gameState.gamePlayers.length;
         let p = this.gameState.gamePlayers[prev];
         let attempts = 0;
-        while (p.folded && attempts < this.gameState.gamePlayers.length) {
+        while ((p.folded || p.status === 'LEFT') && attempts < this.gameState.gamePlayers.length) {
             prev = (prev - 1 + this.gameState.gamePlayers.length) % this.gameState.gamePlayers.length;
             p = this.gameState.gamePlayers[prev];
             attempts++;
@@ -539,7 +598,11 @@ class GameManager extends EventEmitter {
 
     endHand(winner) {
         this.gameState.phase = 'SHOWDOWN';
-        this.gameState.currentLogs.push(`Hand Over. Winner: ${winner.name}`);
+        if (winner) {
+            this.gameState.currentLogs.push(`Hand Over. Winner: ${winner.name}`);
+        } else {
+            this.gameState.currentLogs.push('Hand Over. No winner (all players left).');
+        }
 
         const netChanges = {};
         this.gameState.players.forEach(p => {
@@ -547,7 +610,7 @@ class GameManager extends EventEmitter {
             if (!played) {
                 netChanges[p.id] = 0;
             } else {
-                if (p.id === winner.id) {
+                if (winner && p.id === winner.id) {
                     netChanges[p.id] = this.gameState.pot - played.invested;
                     p.sessionBalance += netChanges[p.id];
                 } else {
@@ -601,7 +664,8 @@ class GameManager extends EventEmitter {
             currentRound: this.currentRound,
             totalRounds: this.totalRounds,
             gameLimitType: this.gameLimitType,
-            targetScore: this.gameState.targetScore
+            targetScore: this.gameState.targetScore,
+            recoveredFromCrash: this.gameState.recoveredFromCrash
         };
     }
 
@@ -683,12 +747,109 @@ class GameManager extends EventEmitter {
     endSession() {
         this.isActive = false;
         this.gameState.phase = 'ENDED';
+        this.clearRequestTimeouts();
         this.emit('session_ended', {
             reason: 'MANUAL_END',
             finalRound: this.currentRound,
             totalRounds: this.totalRounds,
             players: this.gameState.players
         });
+    }
+
+    // Snapshot support for crash recovery
+    getSnapshot() {
+        // Remove hands from gamePlayers for privacy
+        const gamePlayersWithoutHands = this.gameState.gamePlayers.map(p => {
+            const { hand, ...rest } = p;
+            return rest;
+        });
+
+        return {
+            sessionId: this.sessionId,
+            sessionName: this.sessionName,
+            currentRound: this.currentRound,
+            isActive: this.isActive,
+            gameLimitType: this.gameLimitType,
+            totalRounds: this.totalRounds,
+            targetScore: this.targetScore,
+            gameState: {
+                players: this.gameState.players,
+                pot: this.gameState.pot,
+                currentStake: this.gameState.currentStake,
+                activePlayerIndex: this.gameState.activePlayerIndex,
+                gamePlayers: gamePlayersWithoutHands,
+                currentLogs: this.gameState.currentLogs,
+                phase: this.gameState.phase,
+                sideShowRequest: this.gameState.sideShowRequest ? {
+                    requesterId: this.gameState.sideShowRequest.requester.id,
+                    targetId: this.gameState.sideShowRequest.target.id,
+                    timestamp: this.gameState.sideShowRequest.timestamp
+                } : null,
+                showRequest: this.gameState.showRequest ? {
+                    requesterId: this.gameState.showRequest.requester.id,
+                    targetId: this.gameState.showRequest.target.id,
+                    isForceShow: this.gameState.showRequest.isForceShow,
+                    timestamp: this.gameState.showRequest.timestamp
+                } : null
+            },
+            timestamp: Date.now()
+        };
+    }
+
+    restoreSnapshot(snapshot) {
+        if (!snapshot || !snapshot.gameState) return false;
+
+        this.currentRound = snapshot.currentRound || 1;
+        this.isActive = snapshot.isActive !== false;
+        this.gameLimitType = snapshot.gameLimitType || 'rounds';
+        this.totalRounds = snapshot.totalRounds || this.totalRounds;
+        this.targetScore = snapshot.targetScore || this.targetScore;
+
+        const gs = snapshot.gameState;
+        this.gameState.players = gs.players || [];
+        this.gameState.pot = gs.pot || 0;
+        this.gameState.currentStake = gs.currentStake || 20;
+        this.gameState.activePlayerIndex = gs.activePlayerIndex || 0;
+        this.gameState.gamePlayers = gs.gamePlayers || [];
+        this.gameState.currentLogs = gs.currentLogs || [];
+        this.gameState.phase = gs.phase || 'SETUP';
+        this.gameState.gameLimitType = this.gameLimitType;
+        this.gameState.totalRounds = this.totalRounds;
+        this.gameState.targetScore = this.targetScore;
+        this.gameState.recoveredFromCrash = true;
+
+        // Restore pending requests by resolving IDs back to player objects
+        if (gs.sideShowRequest) {
+            const requester = this.gameState.gamePlayers.find(p => p.id === gs.sideShowRequest.requesterId);
+            const target = this.gameState.gamePlayers.find(p => p.id === gs.sideShowRequest.targetId);
+            if (requester && target) {
+                this.gameState.sideShowRequest = {
+                    requester,
+                    target,
+                    timestamp: gs.sideShowRequest.timestamp
+                };
+            }
+        }
+
+        if (gs.showRequest) {
+            const requester = this.gameState.gamePlayers.find(p => p.id === gs.showRequest.requesterId);
+            const target = this.gameState.gamePlayers.find(p => p.id === gs.showRequest.targetId);
+            if (requester && target) {
+                this.gameState.showRequest = {
+                    requester,
+                    target,
+                    isForceShow: gs.showRequest.isForceShow,
+                    timestamp: gs.showRequest.timestamp
+                };
+            }
+        }
+
+        // Add recovery log
+        this.gameState.currentLogs.push('⚠️ Session recovered from server restart. Hands were reset for security.');
+        this.gameState.currentLogs.push('You may continue the current round or start a new one.');
+
+        this.clearRequestTimeouts();
+        return true;
     }
 }
 
