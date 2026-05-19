@@ -20,6 +20,7 @@ class RummyLedger extends EventEmitter {
         
         this.currentRound = 1;
         this.isActive = true;
+        this.roundHistory = [];
 
         this.gameState = {
             players: [],
@@ -38,7 +39,7 @@ class RummyLedger extends EventEmitter {
             ...p,
             status: 'PLAYING',
             score: 0,
-            roundScore: 0  // Score for current round only
+            roundScore: 0
         }));
         if (!this.gameState.phase || this.gameState.phase === 'SETUP') {
             this.gameState.phase = 'SETUP';
@@ -57,8 +58,26 @@ class RummyLedger extends EventEmitter {
     }
 
     removePlayer(playerId) {
-        if (this.gameState.phase !== 'SETUP') return false;
-        this.gameState.players = this.gameState.players.filter(p => p.id !== playerId);
+        const idx = this.gameState.players.findIndex(p => p.id === playerId);
+        if (idx === -1) return false;
+        
+        if (this.gameState.phase === 'SETUP') {
+            this.gameState.players.splice(idx, 1);
+            return true;
+        }
+        
+        const player = this.gameState.players[idx];
+        player.status = 'LEFT';
+        player.roundScore = 0;
+        this.gameState.currentLogs.push(`${player.name} left the game.`);
+        
+        const remaining = this.gameState.players.filter(p => p.status === 'PLAYING');
+        if (remaining.length <= 1) {
+            const winner = remaining.length === 1 ? remaining[0] : null;
+            this.endRoundWithWinner(winner);
+        } else {
+            this.emit('state_change', this.getPublicState());
+        }
         return true;
     }
 
@@ -72,7 +91,6 @@ class RummyLedger extends EventEmitter {
         
         if (validPlayers.length < 2) return { success: false, error: "Need at least 2 players" };
 
-        // Reset round scores
         this.gameState.players.forEach(p => {
             if (p.status === 'PLAYING') {
                 p.roundScore = 0;
@@ -80,8 +98,8 @@ class RummyLedger extends EventEmitter {
         });
 
         this.gameState.currentLogs = [
-            `🎴 Round ${this.currentRound} Started.`,
-            `${validPlayers.length} players in game. Target: ${this.targetScore} points`,
+            `🎴 Round ${this.currentRound} of ${this.totalRounds} Started.`,
+            `${validPlayers.length} players. Target: ${this.targetScore} pts.`,
             `Cards dealt to all players.`
         ];
         this.gameState.phase = 'ACTIVE';
@@ -118,125 +136,77 @@ class RummyLedger extends EventEmitter {
         }
     }
 
-    // Initial Drop: Player drops before first draw = 20 points
     recordInitialDrop(playerId) {
         const player = this.gameState.players.find(p => p.id === playerId);
-        
-        if (!player) {
-            return { success: false, error: "Player not found" };
-        }
-        if (player.status !== 'PLAYING') {
-            return { success: false, error: "Player is not active" };
-        }
-        if (!this.gameState.roundInProgress) {
-            return { success: false, error: "No round in progress" };
-        }
+        if (!player) return { success: false, error: "Player not found" };
+        if (player.status !== 'PLAYING') return { success: false, error: "Player is not active" };
+        if (!this.gameState.roundInProgress) return { success: false, error: "No round in progress" };
 
         const points = 20;
         player.roundScore = points;
         player.score += points;
         
-        this.gameState.currentLogs.push(`✋ ${player.name} INITIAL DROP (before first draw). Charged: ${points} points. Total: ${player.score}`);
-
-        // Check elimination
+        this.gameState.currentLogs.push(`✋ ${player.name} INITIAL DROP. +${points} pts (Total: ${player.score})`);
         this.checkElimination(player);
-        
-        // Check if only one player remains (auto-win)
         this.checkAutoWin();
-        
         this.emit('state_change', this.getPublicState());
         return { success: true, player, points };
     }
 
-    // Middle Drop: Player drops after playing some = 40 points
     recordMiddleDrop(playerId) {
         const player = this.gameState.players.find(p => p.id === playerId);
-        
-        if (!player) {
-            return { success: false, error: "Player not found" };
-        }
-        if (player.status !== 'PLAYING') {
-            return { success: false, error: "Player is not active" };
-        }
-        if (!this.gameState.roundInProgress) {
-            return { success: false, error: "No round in progress" };
-        }
+        if (!player) return { success: false, error: "Player not found" };
+        if (player.status !== 'PLAYING') return { success: false, error: "Player is not active" };
+        if (!this.gameState.roundInProgress) return { success: false, error: "No round in progress" };
 
         const points = 40;
         player.roundScore = points;
         player.score += points;
         
-        this.gameState.currentLogs.push(`✋ ${player.name} MIDDLE DROP (after playing). Charged: ${points} points. Total: ${player.score}`);
-
-        // Check elimination
+        this.gameState.currentLogs.push(`✋ ${player.name} MIDDLE DROP. +${points} pts (Total: ${player.score})`);
         this.checkElimination(player);
-        
-        // Check if only one player remains (auto-win)
         this.checkAutoWin();
-        
         this.emit('state_change', this.getPublicState());
         return { success: true, player, points };
     }
 
-    // Check if only one non-dropped player remains (auto-win scenario)
     checkAutoWin() {
         const activePlayers = this.gameState.players.filter(p => p.status === 'PLAYING');
         const playersNotDropped = activePlayers.filter(p => p.roundScore === 0);
         
-        // If only one player hasn't dropped and no one has declared rummy yet
         if (playersNotDropped.length === 1 && !this.gameState.rummyDeclaredBy && !this.gameState.wrongShowBy) {
             const lastPlayer = playersNotDropped[0];
             this.gameState.rummyDeclaredBy = lastPlayer;
             this.gameState.roundCompletionPhase = true;
             this.gameState.currentLogs.push(`🏆 ${lastPlayer.name} wins automatically! (All others dropped)`);
             
-            // Auto-end the round since everyone else has dropped
             setTimeout(() => {
                 this.endRoundWithWinner(lastPlayer);
             }, 1000);
         }
     }
 
-    // Rummy: Player declares rummy correctly = 0 points, round enters completion phase
     recordValidShow(playerId) {
         const player = this.gameState.players.find(p => p.id === playerId);
-        
-        if (!player) {
-            return { success: false, error: "Player not found" };
-        }
-        if (player.status !== 'PLAYING') {
-            return { success: false, error: "Player is not active" };
-        }
-        if (!this.gameState.roundInProgress) {
-            return { success: false, error: "No round in progress" };
-        }
+        if (!player) return { success: false, error: "Player not found" };
+        if (player.status !== 'PLAYING') return { success: false, error: "Player is not active" };
+        if (!this.gameState.roundInProgress) return { success: false, error: "No round in progress" };
 
         player.roundScore = 0;
         this.gameState.rummyDeclaredBy = player;
         this.gameState.roundCompletionPhase = true;
         
-        this.gameState.currentLogs.push(`🎉 ${player.name} declares RUMMY! 0 points. Waiting for remaining players' points.`);
-        
-        // Check if all other players have been eliminated or have points
+        this.gameState.currentLogs.push(`🎉 ${player.name} declares RUMMY! 0 pts. Waiting for remaining players' points.`);
         this.checkRoundCompletion();
-        
         this.emit('state_change', this.getPublicState());
         return { success: true, player, message: "Rummy declared. Add points for remaining players." };
     }
 
-    // Wrong Show: Player declares wrongly = 80 points penalty, round enters completion phase
     recordWrongShow(playerId) {
         const player = this.gameState.players.find(p => p.id === playerId);
-        
-        if (!player) {
-            return { success: false, error: "Player not found" };
-        }
-        if (player.status !== 'PLAYING') {
-            return { success: false, error: "Player is not active" };
-        }
-        if (!this.gameState.roundInProgress) {
-            return { success: false, error: "No round in progress" };
-        }
+        if (!player) return { success: false, error: "Player not found" };
+        if (player.status !== 'PLAYING') return { success: false, error: "Player is not active" };
+        if (!this.gameState.roundInProgress) return { success: false, error: "No round in progress" };
 
         const points = 80;
         player.roundScore = points;
@@ -245,29 +215,18 @@ class RummyLedger extends EventEmitter {
         this.gameState.wrongShowBy = player;
         this.gameState.roundCompletionPhase = true;
         
-        this.gameState.currentLogs.push(`❌ ${player.name} WRONG SHOW! Penalty: ${points} points. Waiting for remaining players' points.`);
-        
-        // Check elimination
+        this.gameState.currentLogs.push(`❌ ${player.name} WRONG SHOW! +${points} pts (Total: ${player.score})`);
         this.checkElimination(player);
-        
-        // Check if all other players have been eliminated or have points
         this.checkRoundCompletion();
-        
         this.emit('state_change', this.getPublicState());
         return { success: true, player, message: "Wrong show. Add points for remaining players." };
     }
     
-    // Check if round can be completed (all players have scores or are eliminated)
     checkRoundCompletion() {
         const activePlayers = this.gameState.players.filter(p => p.status === 'PLAYING');
-        const playersWithScore = activePlayers.filter(p => p.roundScore > 0 || p.roundScore === 0);
-        const rummyDeclarers = this.gameState.rummyDeclaredBy ? [this.gameState.rummyDeclaredBy] : [];
-        
-        // Check if only one player remains and everyone else dropped
         const nonDroppedPlayers = activePlayers.filter(p => p.roundScore === 0 && !this.gameState.rummyDeclaredBy);
         
         if (nonDroppedPlayers.length === 1 && activePlayers.length > 1) {
-            // Last player auto-wins with 0 points if everyone else dropped
             const lastPlayer = nonDroppedPlayers[0];
             if (!this.gameState.rummyDeclaredBy) {
                 this.gameState.rummyDeclaredBy = lastPlayer;
@@ -276,41 +235,28 @@ class RummyLedger extends EventEmitter {
         }
     }
 
-    // Record card points for a player (when someone else declares)
     recordCardPoints(playerId, points) {
         const player = this.gameState.players.find(p => p.id === playerId);
-        
-        if (!player) {
-            return { success: false, error: "Player not found" };
-        }
-        if (player.status !== 'PLAYING') {
-            return { success: false, error: "Player is not active" };
-        }
-        if (!this.gameState.roundInProgress) {
-            return { success: false, error: "No round in progress" };
-        }
+        if (!player) return { success: false, error: "Player not found" };
+        if (player.status !== 'PLAYING') return { success: false, error: "Player is not active" };
+        if (!this.gameState.roundInProgress) return { success: false, error: "No round in progress" };
 
         player.roundScore = points;
         player.score += points;
         
         this.gameState.currentLogs.push(`📝 ${player.name} card points: ${points}. Total: ${player.score}`);
-
-        // Check elimination
         this.checkElimination(player);
-        
         this.emit('state_change', this.getPublicState());
         return { success: true, player, points };
     }
 
-    // Helper: Check if player should be eliminated
     checkElimination(player) {
         if (player.score >= this.targetScore + 1) {
             player.status = 'ELIMINATED';
-            this.gameState.currentLogs.push(`🚫 ${player.name} is ELIMINATED! (${player.score} points)`);
+            this.gameState.currentLogs.push(`🚫 ${player.name} ELIMINATED! (${player.score} pts)`);
         }
     }
 
-    // End round with a specific winner
     endRoundWithWinner(winner) {
         this.gameState.roundInProgress = false;
         
@@ -318,7 +264,6 @@ class RummyLedger extends EventEmitter {
             this.gameState.winner = winner;
         }
 
-        // Create leaderboard (sorted by score, lowest is better)
         const leaderboard = this.gameState.players
             .filter(p => p.status !== 'ELIMINATED' || p.roundScore > 0)
             .map(p => ({
@@ -330,7 +275,6 @@ class RummyLedger extends EventEmitter {
             }))
             .sort((a, b) => a.totalScore - b.totalScore);
 
-        // Check remaining active players
         const activePlayers = this.gameState.players.filter(p => p.status === 'PLAYING');
         
         let isSessionOver = false;
@@ -345,42 +289,67 @@ class RummyLedger extends EventEmitter {
             }
         }
 
-        this.gameState.currentLogs.push(`📊 Round ${this.currentRound} complete!`);
+        // Record round in history
+        this.roundHistory.push({
+            round: this.currentRound,
+            winner: winner ? { id: winner.id, name: winner.name, totalScore: winner.score } : null,
+            leaderboard: leaderboard.map(p => ({ ...p })),
+            eliminated: this.gameState.players.filter(p => p.status === 'ELIMINATED').map(p => p.name)
+        });
+
+        this.gameState.currentLogs.push(`📊 Round ${this.currentRound} of ${this.totalRounds} complete!`);
         this.gameState.currentLogs.push(`📈 Leaderboard: ${leaderboard.map(p => `${p.name}(${p.totalScore})`).join(', ')}`);
+
+        const completedRound = this.currentRound;
+        
+        // Advance to next round (or mark complete)
+        if (!isSessionOver) {
+            this.currentRound++;
+            if (this.currentRound > this.totalRounds) {
+                isSessionOver = true;
+                finalWinner = leaderboard.length > 0 ? leaderboard[0] : null;
+                this.gameState.currentLogs.push(`🏆 MAX ROUNDS REACHED! ${finalWinner?.name || 'N/A'} is the champion!`);
+            }
+        }
 
         this.emit('state_change', this.getPublicState());
         
         this.emit('round_complete', {
-            round: this.currentRound,
+            round: completedRound,
             winner: winner,
             leaderboard: leaderboard,
             isSessionOver,
-            finalWinner
+            finalWinner,
+            roundHistory: this.roundHistory.map(r => ({
+                round: r.round,
+                winnerName: r.winner?.name || 'N/A',
+                lowestScore: r.leaderboard[0]?.totalScore || 0
+            }))
         });
         
         if (isSessionOver) {
             this.isActive = false;
+            this.gameState.phase = 'ENDED';
             this.emit('session_ended', { 
                 reason: 'GAME_COMPLETE',
                 finalWinner: this.gameState.winner,
-                finalRound: this.currentRound,
-                leaderboard: leaderboard
+                finalRound: completedRound,
+                totalRounds: this.totalRounds,
+                leaderboard: leaderboard,
+                roundHistory: this.roundHistory
             });
         }
 
         return { success: true, winner, leaderboard };
     }
 
-    // Manual round end (operator ends round)
     endRound() {
         if (!this.gameState.roundInProgress && !this.gameState.roundCompletionPhase) {
             return { success: false, error: "No round in progress" };
         }
         
-        // Determine winner
         let winner = this.gameState.rummyDeclaredBy;
         
-        // If no rummy declared, find player with lowest round score
         if (!winner) {
             const activePlayers = this.gameState.players.filter(p => p.status === 'PLAYING');
             if (activePlayers.length > 0) {
@@ -389,12 +358,9 @@ class RummyLedger extends EventEmitter {
         }
 
         this.gameState.currentLogs.push(`⏹️ Round ${this.currentRound} completed by operator.`);
-        
-        // End the round properly
         return this.endRoundWithWinner(winner);
     }
 
-    // Legacy method for compatibility
     recordWinner(winnerId) {
         const winner = this.gameState.players.find(p => p.id === winnerId);
         if (!winner) {
@@ -434,12 +400,14 @@ class RummyLedger extends EventEmitter {
         this.emit('session_ended', {
             reason: 'MANUAL_END',
             finalRound: this.currentRound,
-            leaderboard: finalLeaderboard
+            totalRounds: this.totalRounds,
+            finalWinner: finalLeaderboard.length > 0 ? finalLeaderboard[0] : null,
+            leaderboard: finalLeaderboard,
+            roundHistory: this.roundHistory
         });
     }
 
     getPublicState() {
-        // Create leaderboard sorted by score
         const leaderboard = this.gameState.players
             .map(p => ({
                 id: p.id,
@@ -450,13 +418,10 @@ class RummyLedger extends EventEmitter {
             }))
             .sort((a, b) => a.totalScore - b.totalScore);
 
-        // Find first active player for turn indication
         const activePlayerIndex = this.gameState.players.findIndex(p => p.status === 'PLAYING');
-
-        // Determine if we're waiting for points from remaining players
         const activePlayers = this.gameState.players.filter(p => p.status === 'PLAYING');
+        
         const playersNeedingPoints = activePlayers.filter(p => {
-            // Player needs points if they haven't been assigned any AND they didn't declare rummy or wrong show
             const isDeclarer = this.gameState.rummyDeclaredBy?.id === p.id || this.gameState.wrongShowBy?.id === p.id;
             const hasPoints = p.roundScore > 0 || (p.roundScore === 0 && isDeclarer);
             return !isDeclarer && !hasPoints;
@@ -464,7 +429,7 @@ class RummyLedger extends EventEmitter {
 
         return {
             players: this.gameState.players,
-            gamePlayers: this.gameState.players, // For frontend compatibility
+            gamePlayers: this.gameState.players,
             leaderboard: leaderboard,
             currentLogs: this.gameState.currentLogs,
             phase: this.gameState.phase,
@@ -478,7 +443,9 @@ class RummyLedger extends EventEmitter {
             rummyDeclaredBy: this.gameState.rummyDeclaredBy,
             wrongShowBy: this.gameState.wrongShowBy,
             playersNeedingPoints: playersNeedingPoints.length,
-            activePlayerIndex: activePlayerIndex >= 0 ? activePlayerIndex : 0
+            activePlayerIndex: activePlayerIndex >= 0 ? activePlayerIndex : 0,
+            roundHistory: this.roundHistory,
+            roundsRemaining: Math.max(0, this.totalRounds - this.currentRound + (this.gameState.roundInProgress ? 0 : 1))
         };
     }
 }

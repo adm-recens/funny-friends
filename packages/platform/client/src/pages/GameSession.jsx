@@ -146,16 +146,20 @@ const GameSession = () => {
         setSessionSummaryData(state);
         setShowSessionSummary(true);
         
-        // Also set the game state so user can see final standings
         if (state.finalPlayers) {
           setPlayers(state.finalPlayers);
           setGamePlayers(state.finalPlayers);
+        }
+        if (state.leaderboard) {
+          setPlayers(state.leaderboard);
         }
         setGameState({
           phase: 'ENDED',
           currentRound: state.finalRound,
           totalRounds: state.totalRounds,
-          players: state.finalPlayers || [],
+          players: state.finalPlayers || state.leaderboard || state.players || [],
+          overallWinner: state.overallWinner || state.finalWinner,
+          roundHistory: state.roundHistory || [],
           ...state
         });
         setSessionStatus('ended');
@@ -537,8 +541,13 @@ const GameSession = () => {
                   {decodeURIComponent(sessionName)}
                 </h1>
                 <p className="text-slate-400 text-xs sm:text-sm">
-                  {session?.gameName || session?.gameCode} • Round {gameState?.currentRound || 1}/{gameState?.totalRounds || session?.totalRounds || 10}
+                  {session?.gameName || session?.gameCode} • Round {gameState?.currentRound || 1} of {gameState?.totalRounds || session?.totalRounds || 10}
                   {isRummy && gameState?.targetScore && ` • Target: ${gameState.targetScore} pts`}
+                  {!isRummy && gameState?.totalRounds && (
+                    <span className="ml-2 text-yellow-400">
+                      ({Math.max(0, (gameState?.totalRounds || 0) - (gameState?.currentRound || 0))} remaining)
+                    </span>
+                  )}
                 </p>
               </div>
             </div>
@@ -938,6 +947,30 @@ const GameSession = () => {
               })}
             </div>
 
+            {/* Overall Standings - Active Game HUD */}
+            {currentPhase !== 'SETUP' && gameState?.overallStandings && (
+              <div className="bg-slate-800 rounded-xl border border-slate-700 p-4 mb-4">
+                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
+                  {isRummy ? 'Leaderboard' : 'Overall Standings'} 
+                  <span className="ml-2 text-slate-400 normal-case">
+                    ({isRummy ? `${Math.max(0, (gameState?.totalRounds || 0) - (gameState?.currentRound || 0) + 1)} rounds remaining` : `${Math.max(0, (gameState?.totalRounds || 0) - (gameState?.currentRound || 0))} hands remaining`})
+                  </span>
+                </h3>
+                <div className="space-y-1">
+                  {gameState.overallStandings.slice(0, 5).map((player, index) => (
+                    <div key={player.id} className={`flex justify-between items-center p-1.5 rounded text-sm ${index === 0 ? 'bg-yellow-500/10' : ''}`}>
+                      <div className="flex items-center gap-2">
+                        <span className={`font-bold text-xs ${index === 0 ? 'text-yellow-400' : 'text-slate-400'}`}>#{index + 1}</span>
+                        <span className="text-slate-200">{player.name}</span>
+                        {player.status === 'LEFT' && <span className="text-[10px] text-red-400">LEFT</span>}
+                      </div>
+                      <span className="font-bold text-white">{isRummy ? `${player.score || 0} pts` : `${player.sessionBalance || 0}`}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Teen Patti Controls */}
             {isOperatorOrAdmin && activePlayer && !sideShowRequest && !showRequest && !isRummy && (
               <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
@@ -1127,38 +1160,61 @@ const GameSession = () => {
       {/* Round Summary Modal */}
       {showRoundSummary && roundSummaryData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
-          <div className="bg-slate-800 p-8 rounded-2xl max-w-lg w-full text-center border border-slate-700 max-h-[90vh] overflow-y-auto">
+          <div className="bg-slate-800 p-6 rounded-2xl max-w-lg w-full border border-slate-700 max-h-[90vh] overflow-y-auto">
             <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-yellow-400 to-yellow-600"></div>
-            <Trophy className="mx-auto text-yellow-500 mb-4" size={64} />
-            <h2 className="text-3xl font-black text-slate-50 mb-1 uppercase">
-              {isRummy ? 'Round Complete!' : 'Winner!'}
-            </h2>
-            <p className="text-2xl font-bold text-blue-400 mb-6">{roundSummaryData.winner?.name}</p>
-
-            <div className="bg-blue-900/20 rounded-xl p-4 mb-4 border border-blue-500/30">
-              <p className="text-blue-400 uppercase text-xs font-bold tracking-widest mb-1">Round</p>
-              <p className="text-2xl font-black text-slate-50">
-                {roundSummaryData.currentRound} of {gameState?.totalRounds || session?.totalRounds || 10}
+            <div className="text-center mb-4">
+              <Trophy className="mx-auto text-yellow-500 mb-2" size={48} />
+              <h2 className="text-2xl font-black text-slate-50 uppercase">
+                {isRummy ? 'Round Complete!' : 'Hand Winner!'}
+              </h2>
+              <p className="text-xl font-bold text-blue-400">
+                {roundSummaryData.winner?.name || 'No winner'}
               </p>
             </div>
 
+            {/* Round info bar */}
+            <div className="bg-blue-900/20 rounded-xl p-3 mb-4 border border-blue-500/30 text-center">
+              <p className="text-blue-400 uppercase text-xs font-bold tracking-widest">Round {roundSummaryData.currentRound || roundSummaryData.round} of {roundSummaryData.totalRounds || gameState?.totalRounds || session?.totalRounds || 10}</p>
+              {!isRummy && (
+                <p className="text-yellow-400 text-sm font-bold mt-1">Pot: {roundSummaryData.pot || 0}</p>
+              )}
+            </div>
+
+            {/* Overall Standings */}
+            {roundSummaryData.playerStandings && !isRummy && (
+              <div className="mb-4">
+                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Overall Standings</h3>
+                <div className="space-y-1">
+                  {roundSummaryData.playerStandings.map((player, index) => (
+                    <div key={player.id} className={`flex justify-between items-center p-2 rounded-lg ${index === 0 ? 'bg-yellow-500/10 border border-yellow-500/30' : 'bg-slate-700/30'}`}>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-sm font-bold ${index === 0 ? 'text-yellow-400' : 'text-slate-400'}`}>#{index + 1}</span>
+                        <span className="font-medium text-slate-50 text-sm">{player.name}</span>
+                        {index === 0 && <span className="text-[10px] bg-yellow-500/30 text-yellow-400 px-1.5 py-0.5 rounded">LEADER</span>}
+                      </div>
+                      <span className="font-bold text-white text-sm">{player.sessionBalance}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Rummy Leaderboard */}
             {isRummy && roundSummaryData.leaderboard && (
-              <div className="mb-6">
-                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-3">Leaderboard</h3>
-                <div className="space-y-2">
+              <div className="mb-4">
+                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Leaderboard</h3>
+                <div className="space-y-1">
                   {roundSummaryData.leaderboard.map((player, index) => (
-                    <div key={player.id} className="flex justify-between items-center bg-slate-700/50 p-3 rounded-xl">
-                      <div className="flex items-center gap-3">
-                        <span className="text-slate-400 font-mono">#{index + 1}</span>
-                        <span className="font-bold text-slate-50">{player.name}</span>
+                    <div key={player.id} className={`flex justify-between items-center p-2 rounded-lg ${index === 0 && player.status !== 'ELIMINATED' ? 'bg-green-500/10 border border-green-500/30' : 'bg-slate-700/30'}`}>
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-400 font-mono text-sm">#{index + 1}</span>
+                        <span className="font-medium text-slate-50 text-sm">{player.name}</span>
                         {player.status === 'ELIMINATED' && (
-                          <span className="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded">OUT</span>
+                          <span className="text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded">OUT</span>
                         )}
                       </div>
                       <div className="text-right">
-                        <div className="font-bold text-white">{player.totalScore} pts</div>
-                        <div className="text-xs text-slate-400">+{player.roundScore} this round</div>
+                        <span className="font-bold text-white text-sm">{player.totalScore} pts</span>
                       </div>
                     </div>
                   ))}
@@ -1168,16 +1224,16 @@ const GameSession = () => {
 
             {/* Teen Patti Net Changes */}
             {!isRummy && roundSummaryData.netChanges && Object.keys(roundSummaryData.netChanges).length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-3">Net Changes</h3>
-                <div className="space-y-2">
+              <div className="mb-4">
+                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">This Hand</h3>
+                <div className="space-y-1">
                   {Object.entries(roundSummaryData.netChanges).map(([playerId, change]) => {
                     const player = players.find(p => p.id === parseInt(playerId));
                     if (!player) return null;
                     return (
-                      <div key={playerId} className="flex justify-between items-center bg-slate-700/50 p-3 rounded-xl">
-                        <span className="font-bold text-slate-50">{player.name}</span>
-                        <span className={`font-bold ${change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      <div key={playerId} className="flex justify-between items-center bg-slate-700/30 p-2 rounded-lg">
+                        <span className="font-medium text-slate-50 text-sm">{player.name}</span>
+                        <span className={`font-bold text-sm ${change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                           {change >= 0 ? '+' : ''}{change}
                         </span>
                       </div>
@@ -1187,27 +1243,51 @@ const GameSession = () => {
               </div>
             )}
 
+            {/* Round History */}
+            {roundSummaryData.roundHistory && roundSummaryData.roundHistory.length > 0 && (
+              <div className="mb-4">
+                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Round History</h3>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {roundSummaryData.roundHistory.map((rh, idx) => (
+                    <div key={idx} className="flex justify-between items-center bg-slate-700/20 p-1.5 rounded text-xs">
+                      <span className="text-slate-400">Round {rh.round}</span>
+                      <span className="text-slate-300">{rh.winnerName || 'N/A'}</span>
+                      {!isRummy && <span className="text-yellow-400">Pot: {rh.pot}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {roundSummaryData.eliminated && roundSummaryData.eliminated.length > 0 && (
-              <div className="mb-6 bg-red-900/20 rounded-xl p-4 border border-red-500/30">
-                <h3 className="text-sm font-bold text-red-400 uppercase tracking-widest mb-2">Eliminated</h3>
-                <p className="text-red-300">{roundSummaryData.eliminated.join(', ')}</p>
+              <div className="mb-4 bg-red-900/20 rounded-xl p-3 border border-red-500/30">
+                <h3 className="text-xs font-bold text-red-400 uppercase tracking-widest mb-1">Eliminated</h3>
+                <p className="text-red-300 text-sm">{roundSummaryData.eliminated.join(', ')}</p>
+              </div>
+            )}
+
+            {/* Overall Winner Badge */}
+            {roundSummaryData.overallWinner && !roundSummaryData.isSessionOver && (
+              <div className="mb-4 bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-3 text-center">
+                <span className="text-xs text-yellow-400 uppercase tracking-widest">Overall Leader</span>
+                <p className="text-lg font-bold text-yellow-400">{roundSummaryData.overallWinner.name} ({roundSummaryData.overallWinner.sessionBalance || roundSummaryData.overallWinner.score || 0})</p>
               </div>
             )}
 
             {!roundSummaryData.isSessionOver && (
-              <div className="mb-4">
+              <div className="mb-3">
                 <button 
                   onClick={() => setShowPlayerRequestModal(true)}
-                  className="w-full py-3 bg-green-500/20 border-2 border-green-500/30 text-green-400 rounded-xl font-bold flex items-center justify-center gap-2"
+                  className="w-full py-2.5 bg-green-500/20 border-2 border-green-500/30 text-green-400 rounded-xl font-bold flex items-center justify-center gap-2 text-sm"
                 >
-                  <UserPlus size={20} /> Request New Players
+                  <UserPlus size={18} /> Request New Players
                 </button>
               </div>
             )}
 
             <button 
               onClick={handleNextRound} 
-              className="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-bold text-lg"
+              className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-bold text-lg"
             >
               {roundSummaryData.isSessionOver ? 'View Final Results' : 'Next Round'}
             </button>
@@ -1218,27 +1298,76 @@ const GameSession = () => {
       {/* Session Ended Modal */}
       {showSessionSummary && sessionSummaryData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
-          <div className="bg-slate-800 p-6 rounded-2xl max-w-lg w-full border border-slate-700 max-h-[90vh] overflow-y-auto">
+          <div className="bg-slate-800 p-6 rounded-2xl max-w-2xl w-full border border-slate-700 max-h-[90vh] overflow-y-auto">
             <div className="text-center mb-6">
               <Trophy className="mx-auto text-yellow-500 mb-4" size={64} />
               <h2 className="text-3xl font-black text-slate-50 mb-2">Game Complete!</h2>
-              <p className="text-slate-400">Session: {decodeURIComponent(sessionName)}</p>
+              <p className="text-slate-400">{decodeURIComponent(sessionName)}</p>
             </div>
             
-            <div className="bg-slate-700/50 rounded-xl p-4 mb-6">
-              <p className="text-slate-400 text-sm text-center">Final Round</p>
-              <p className="text-2xl font-black text-slate-50 text-center">
+            {/* Overall Winner */}
+            {(sessionSummaryData.overallWinner || sessionSummaryData.finalWinner) && (
+              <div className="bg-yellow-500/10 border-2 border-yellow-500/30 rounded-xl p-4 mb-6 text-center">
+                <p className="text-yellow-400 text-xs uppercase tracking-widest font-bold mb-1">Overall Champion</p>
+                <p className="text-2xl font-black text-yellow-400">
+                  {(sessionSummaryData.overallWinner?.name || sessionSummaryData.finalWinner?.name || 'N/A')}
+                </p>
+                <p className="text-yellow-300 text-sm">
+                  {isRummy ? `${sessionSummaryData.overallWinner?.totalScore || sessionSummaryData.finalWinner?.totalScore || sessionSummaryData.overallWinner?.score || sessionSummaryData.finalWinner?.score || 0} pts` : `${sessionSummaryData.overallWinner?.sessionBalance || sessionSummaryData.finalWinner?.sessionBalance || 0} chips`}
+                </p>
+              </div>
+            )}
+            
+            <div className="bg-slate-700/50 rounded-xl p-4 mb-6 text-center">
+              <p className="text-slate-400 text-sm">Final Round</p>
+              <p className="text-2xl font-black text-slate-50">
                 {sessionSummaryData.finalRound} / {sessionSummaryData.totalRounds}
               </p>
             </div>
 
+            {/* Round History Table */}
+            {sessionSummaryData.roundHistory && sessionSummaryData.roundHistory.length > 0 && (
+              <div className="mb-6">
+                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-3">Round History</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-slate-400 border-b border-slate-700">
+                        <th className="text-left py-2 px-2">Round</th>
+                        <th className="text-left py-2 px-2">Winner</th>
+                        {!isRummy && <th className="text-right py-2 px-2">Pot</th>}
+                        <th className="text-right py-2 px-2">Leader</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sessionSummaryData.roundHistory.map((rh, idx) => (
+                        <tr key={idx} className="border-b border-slate-700/50">
+                          <td className="py-2 px-2 text-slate-300">{rh.round}</td>
+                          <td className="py-2 px-2 text-slate-50 font-medium">{rh.winner?.name || rh.winnerName || 'N/A'}</td>
+                          {!isRummy && <td className="py-2 px-2 text-right text-yellow-400">{rh.pot || '-'}</td>}
+                          <td className="py-2 px-2 text-right text-slate-300">
+                            {rh.playerStandings ? rh.playerStandings[0]?.name : (rh.leaderboard ? rh.leaderboard[0]?.name : '-')}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
             {/* Final Standings */}
-            {sessionSummaryData.finalPlayers && sessionSummaryData.finalPlayers.length > 0 && (
+            {(sessionSummaryData.finalPlayers || sessionSummaryData.leaderboard || sessionSummaryData.players) && (
               <div className="mb-6">
                 <h3 className="text-lg font-bold text-slate-300 mb-3 text-center">Final Standings</h3>
                 <div className="space-y-2">
-                  {sessionSummaryData.finalPlayers
-                    .sort((a, b) => (a.score || 0) - (b.score || 0))
+                  {(sessionSummaryData.finalPlayers || sessionSummaryData.leaderboard || sessionSummaryData.players || [])
+                    .sort((a, b) => {
+                      if (isRummy) {
+                        return (a.score || 0) - (b.score || 0);
+                      }
+                      return (b.sessionBalance || 0) - (a.sessionBalance || 0);
+                    })
                     .map((player, index) => (
                     <div 
                       key={player.id} 
@@ -1252,8 +1381,12 @@ const GameSession = () => {
                         }`}>#{index + 1}</span>
                         <span className="font-bold text-slate-50">{player.name}</span>
                         {index === 0 && <span className="text-xs bg-yellow-500/30 text-yellow-400 px-2 py-0.5 rounded">WINNER</span>}
+                        {player.status === 'ELIMINATED' && <span className="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded">OUT</span>}
+                        {player.status === 'LEFT' && <span className="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded">LEFT</span>}
                       </div>
-                      <span className="font-bold text-white">{player.score || player.sessionBalance || 0} pts</span>
+                      <span className="font-bold text-white">
+                        {isRummy ? `${player.score || 0} pts` : `${player.sessionBalance || 0} chips`}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -1265,7 +1398,7 @@ const GameSession = () => {
                 onClick={() => setShowSessionSummary(false)} 
                 className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold"
               >
-                View Game Details
+                Close
               </button>
               <button 
                 onClick={() => navigate('/operator/sessions')} 

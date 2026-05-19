@@ -91,6 +91,8 @@ class GameManager extends EventEmitter {
         
         this.currentRound = 1;
         this.isActive = true;
+        this.roundHistory = [];
+        this.overallWinner = null;
 
         this.gameState = {
             players: [],
@@ -156,52 +158,36 @@ class GameManager extends EventEmitter {
     }
 
     removePlayer(playerId) {
-        // Find player in the main players array
         const playerIndex = this.gameState.players.findIndex(p => p.id === playerId);
         if (playerIndex === -1) return false;
         
         const player = this.gameState.players[playerIndex];
         
         if (this.gameState.phase === 'SETUP') {
-            // Simple removal during setup
             this.gameState.players.splice(playerIndex, 1);
-            // Also remove from gamePlayers if present
             this.gameState.gamePlayers = this.gameState.gamePlayers.filter(p => p.id !== playerId);
             this.emit('state_change', this.getPublicState());
             return true;
         }
         
-        // ACTIVE phase: mark as LEFT and fold immediately
         player.status = 'LEFT';
         player.folded = true;
         
-        // Also mark in gamePlayers if present
         const gamePlayer = this.gameState.gamePlayers.find(p => p.id === playerId);
         if (gamePlayer) {
             gamePlayer.status = 'LEFT';
             gamePlayer.folded = true;
         }
         
-        this.gameState.currentLogs.push(`${player.name} left the game. Their invested amount stays in the pot.`);
+        this.gameState.currentLogs.push(`${player.name} left the game.`);
         
-        // Check if only one player remains active
         const remaining = this.gameState.gamePlayers.filter(p => !p.folded && p.status !== 'LEFT');
         if (remaining.length === 1) {
             this.endHand(remaining[0]);
         } else if (remaining.length === 0) {
-            // Edge case: everyone left, end hand with no winner (pot stays for next round)
             this.gameState.currentLogs.push('All players have left. Hand ends with no winner.');
-            this.gameState.phase = 'SHOWDOWN';
-            this.emit('hand_complete', {
-                winner: null,
-                pot: this.gameState.pot,
-                netChanges: {},
-                currentRound: this.currentRound,
-                isSessionOver: this.currentRound > this.totalRounds
-            });
-            this.currentRound++;
+            this.endHand(null);
         } else {
-            // If the removed player was the active player, rotate turn
             const activePlayer = this.gameState.gamePlayers[this.gameState.activePlayerIndex];
             if (!activePlayer || activePlayer.id === playerId || activePlayer.folded || activePlayer.status === 'LEFT') {
                 this.gameState.activePlayerIndex = this.getNextActiveIndex(this.gameState.activePlayerIndex);
@@ -213,23 +199,33 @@ class GameManager extends EventEmitter {
     }
 
     startRound() {
-        console.log('[DEBUG] startRound called. Total players:', this.gameState.players.length);
+        // If we just finished a round, advance to the next
+        if (this.gameState.phase === 'SHOWDOWN' || this.gameState.phase === 'ENDED') {
+            this.currentRound++;
+        }
         
         if (this.currentRound > this.totalRounds) {
             this.isActive = false;
-            return { success: false, error: "Session complete" };
+            this.gameState.phase = 'ENDED';
+            this.emit('session_ended', {
+                reason: 'MAX_ROUNDS_REACHED',
+                finalRound: this.currentRound - 1,
+                totalRounds: this.totalRounds,
+                overallWinner: this.overallWinner,
+                roundHistory: this.roundHistory
+            });
+            return { success: false, error: "All rounds completed" };
         }
         
-        // Filter out players who have LEFT or are eliminated
         const validPlayers = this.gameState.players.filter(p => {
             const nameValid = p.name && p.name.trim() !== '';
             const statusValid = p.status !== 'LEFT' && p.status !== 'ELIMINATED';
             return nameValid && statusValid;
         });
         
-        console.log('[DEBUG] Valid players:', validPlayers.length, validPlayers);
-        
-        if (validPlayers.length < 2) return { success: false, error: "Not enough players" };
+        if (validPlayers.length < 2) {
+            return { success: false, error: "Need at least 2 players" };
+        }
 
         const deck = shuffleDeck(createDeck());
         let deckIndex = 0;
@@ -241,30 +237,23 @@ class GameManager extends EventEmitter {
             invested: 5,
             hand: [deck[deckIndex++], deck[deckIndex++], deck[deckIndex++]]
         }));
-        
-        console.log('[DEBUG] gamePlayers set:', this.gameState.gamePlayers.length, this.gameState.gamePlayers);
-        console.log('[DEBUG] Sample hand:', this.gameState.gamePlayers[0]?.hand);
 
         this.gameState.pot = this.gameState.gamePlayers.length * 5;
         this.gameState.currentStake = 20;
         this.gameState.activePlayerIndex = 0;
-        this.gameState.currentLogs = [`Round ${this.currentRound} Started. Boot collected.`];
+        this.gameState.currentLogs = [`Round ${this.currentRound} Started. Boot: ${this.gameState.pot}. Stake: ${this.gameState.currentStake}.`];
         this.gameState.phase = 'ACTIVE';
         this.gameState.sideShowRequest = null;
         this.gameState.showRequest = null;
         this.gameState.recoveredFromCrash = false;
         
-        // Clear any lingering timeouts from previous round
         this.clearRequestTimeouts();
 
-        const state = this.getPublicState();
-        console.log('[DEBUG] Emitting state_change with phase:', state.phase, 'gamePlayers:', state.gamePlayers.length);
-        this.emit('state_change', state);
+        this.emit('state_change', this.getPublicState());
         return { success: true };
     }
 
     handleAction(action) {
-        // Ledger actions (operator recording physical game)
         if (action.type === 'ADD_TO_POT') {
             return this.addToPot(action.playerId, action.amount);
         }
@@ -275,7 +264,6 @@ class GameManager extends EventEmitter {
             return this.resetRound();
         }
         
-        // Automated game actions (for online play)
         if (action.type === 'CANCEL_SIDE_SHOW') {
             return this.cancelSideShow();
         }
@@ -408,7 +396,6 @@ class GameManager extends EventEmitter {
         
         const { requester, target } = this.gameState.sideShowRequest;
         
-        // Validate winnerId is either requester or target
         if (winnerId !== requester.id && winnerId !== target.id) {
             return { success: false, error: "Invalid winner ID" };
         }
@@ -431,7 +418,6 @@ class GameManager extends EventEmitter {
         }
         
         this.gameState.sideShowRequest = null;
-        // Turn goes to the player after the requester (not the requester themselves)
         this.gameState.activePlayerIndex = this.getNextActiveIndex(requesterIndex);
         
         this.emit('state_change', this.getPublicState());
@@ -507,7 +493,6 @@ class GameManager extends EventEmitter {
         
         const { requester, target, isForceShow } = this.gameState.showRequest;
         
-        // Validate winnerId is either requester or target
         if (winnerId !== requester.id && winnerId !== target.id) {
             return { success: false, error: "Invalid winner ID" };
         }
@@ -517,12 +502,10 @@ class GameManager extends EventEmitter {
         
         if (isForceShow) {
             if (winner.id === requester.id) {
-                // SEEN player wins against BLIND player
                 this.gameState.currentLogs.push(`${requester.name} (SEEN) wins Force Show against ${target.name} (BLIND)`);
                 target.folded = true;
                 this.gameState.currentLogs.push(`${target.name} packed.`);
             } else {
-                // BLIND player wins against SEEN player - SEEN player pays penalty
                 const penalty = this.gameState.currentStake * 2;
                 requester.invested += penalty;
                 this.gameState.pot += penalty;
@@ -540,13 +523,11 @@ class GameManager extends EventEmitter {
                 this.endHand(remaining[0]);
                 return { success: true, winner, loser };
             } else {
-                // Turn goes to player after requester
                 this.gameState.activePlayerIndex = this.getNextActiveIndex(requesterIndex);
                 this.emit('state_change', this.getPublicState());
                 return { success: true, winner, loser };
             }
         } else {
-            // Regular Show - both players show cards, higher hand wins
             this.gameState.currentLogs.push(`${requester.name} showed cards against ${target.name}`);
             this.gameState.showRequest = null;
             this.endHand(winner);
@@ -603,8 +584,9 @@ class GameManager extends EventEmitter {
 
     endHand(winner) {
         this.gameState.phase = 'SHOWDOWN';
+        
         if (winner) {
-            this.gameState.currentLogs.push(`Hand Over. Winner: ${winner.name}`);
+            this.gameState.currentLogs.push(`🏆 Hand Over. Winner: ${winner.name}`);
         } else {
             this.gameState.currentLogs.push('Hand Over. No winner (all players left).');
         }
@@ -625,10 +607,28 @@ class GameManager extends EventEmitter {
             }
         });
 
-        const completedRound = this.currentRound;
-        this.currentRound++;
-        
-        const isSessionOver = this.currentRound > this.totalRounds;
+        // Build player standings (sorted by balance, highest first)
+        const playerStandings = this.gameState.players
+            .map(p => ({ id: p.id, name: p.name, sessionBalance: p.sessionBalance }))
+            .sort((a, b) => b.sessionBalance - a.sessionBalance);
+
+        // Determine overall winner (highest balance)
+        this.overallWinner = playerStandings.length > 0 ? {
+            id: playerStandings[0].id,
+            name: playerStandings[0].name,
+            sessionBalance: playerStandings[0].sessionBalance
+        } : null;
+
+        // Record round in history
+        this.roundHistory.push({
+            round: this.currentRound,
+            winner: winner ? { id: winner.id, name: winner.name } : null,
+            pot: this.gameState.pot,
+            netChanges: { ...netChanges },
+            playerStandings: playerStandings.map(p => ({ ...p }))
+        });
+
+        const isSessionOver = this.currentRound >= this.totalRounds;
 
         this.emit('state_change', this.getPublicState());
         
@@ -636,16 +636,27 @@ class GameManager extends EventEmitter {
             winner,
             pot: this.gameState.pot,
             netChanges,
-            currentRound: completedRound,
-            isSessionOver
+            currentRound: this.currentRound,
+            totalRounds: this.totalRounds,
+            isSessionOver,
+            playerStandings: playerStandings.map(p => ({ ...p })),
+            overallWinner: this.overallWinner,
+            roundHistory: this.roundHistory.map(r => ({
+                round: r.round,
+                winnerName: r.winner?.name || 'No winner',
+                pot: r.pot
+            }))
         });
         
         if (isSessionOver) {
             this.isActive = false;
-            this.emit('session_ended', { 
+            this.emit('session_ended', {
                 reason: 'MAX_ROUNDS_REACHED',
-                finalRound: this.currentRound - 1,
-                totalRounds: this.totalRounds
+                finalRound: this.currentRound,
+                totalRounds: this.totalRounds,
+                overallWinner: this.overallWinner,
+                roundHistory: this.roundHistory,
+                players: this.gameState.players
             });
         }
     }
@@ -655,6 +666,11 @@ class GameManager extends EventEmitter {
             const { hand, ...publicPlayer } = p;
             return publicPlayer;
         });
+
+        // Build overall standings for display
+        const overallStandings = this.gameState.players
+            .map(p => ({ id: p.id, name: p.name, sessionBalance: p.sessionBalance, status: p.status }))
+            .sort((a, b) => b.sessionBalance - a.sessionBalance);
 
         return {
             players: this.gameState.players,
@@ -670,11 +686,13 @@ class GameManager extends EventEmitter {
             totalRounds: this.totalRounds,
             gameLimitType: this.gameLimitType,
             targetScore: this.gameState.targetScore,
-            recoveredFromCrash: this.gameState.recoveredFromCrash
+            recoveredFromCrash: this.gameState.recoveredFromCrash,
+            overallStandings,
+            roundHistory: this.roundHistory,
+            overallWinner: this.overallWinner
         };
     }
 
-    // Ledger Methods (Operator recording physical game)
     addToPot(playerId, amount) {
         const player = this.gameState.players.find(p => p.id === playerId);
         if (!player) {
@@ -711,33 +729,10 @@ class GameManager extends EventEmitter {
                 netChanges[p.id] = -invested;
                 p.sessionBalance = (p.sessionBalance || 0) + netChanges[p.id];
             }
-            // Reset invested for next round
             p.invested = 0;
         });
 
-        this.currentRound++;
-        const isSessionOver = this.currentRound > this.totalRounds;
-
-        this.emit('state_change', this.getPublicState());
-        
-        this.emit('hand_complete', {
-            winner,
-            pot: this.gameState.pot,
-            netChanges,
-            currentRound: this.currentRound,
-            isSessionOver
-        });
-        
-        if (isSessionOver) {
-            this.isActive = false;
-            this.emit('session_ended', { 
-                reason: 'MAX_ROUNDS_REACHED',
-                finalRound: this.currentRound - 1,
-                totalRounds: this.totalRounds
-            });
-        }
-
-        return { success: true, winner, pot: this.gameState.pot };
+        return this.endHand(winner);
     }
 
     resetRound() {
@@ -756,17 +751,23 @@ class GameManager extends EventEmitter {
         this.isActive = false;
         this.gameState.phase = 'ENDED';
         this.clearRequestTimeouts();
+        
+        const finalStandings = this.gameState.players
+            .map(p => ({ id: p.id, name: p.name, sessionBalance: p.sessionBalance, status: p.status }))
+            .sort((a, b) => b.sessionBalance - a.sessionBalance);
+
         this.emit('session_ended', {
             reason: 'MANUAL_END',
             finalRound: this.currentRound,
             totalRounds: this.totalRounds,
-            players: this.gameState.players
+            overallWinner: this.overallWinner,
+            roundHistory: this.roundHistory,
+            players: this.gameState.players,
+            finalStandings
         });
     }
 
-    // Snapshot support for crash recovery
     getSnapshot() {
-        // Remove hands from gamePlayers for privacy
         const gamePlayersWithoutHands = this.gameState.gamePlayers.map(p => {
             const { hand, ...rest } = p;
             return rest;
@@ -780,6 +781,8 @@ class GameManager extends EventEmitter {
             gameLimitType: this.gameLimitType,
             totalRounds: this.totalRounds,
             targetScore: this.targetScore,
+            roundHistory: this.roundHistory,
+            overallWinner: this.overallWinner,
             gameState: {
                 players: this.gameState.players,
                 pot: this.gameState.pot,
@@ -812,6 +815,8 @@ class GameManager extends EventEmitter {
         this.gameLimitType = snapshot.gameLimitType || 'rounds';
         this.totalRounds = snapshot.totalRounds || this.totalRounds;
         this.targetScore = snapshot.targetScore || this.targetScore;
+        this.roundHistory = snapshot.roundHistory || [];
+        this.overallWinner = snapshot.overallWinner || null;
 
         const gs = snapshot.gameState;
         this.gameState.players = gs.players || [];
@@ -826,14 +831,12 @@ class GameManager extends EventEmitter {
         this.gameState.targetScore = this.targetScore;
         this.gameState.recoveredFromCrash = true;
 
-        // Restore pending requests by resolving IDs back to player objects
         if (gs.sideShowRequest) {
             const requester = this.gameState.gamePlayers.find(p => p.id === gs.sideShowRequest.requesterId);
             const target = this.gameState.gamePlayers.find(p => p.id === gs.sideShowRequest.targetId);
             if (requester && target) {
                 this.gameState.sideShowRequest = {
-                    requester,
-                    target,
+                    requester, target,
                     timestamp: gs.sideShowRequest.timestamp
                 };
             }
@@ -844,17 +847,14 @@ class GameManager extends EventEmitter {
             const target = this.gameState.gamePlayers.find(p => p.id === gs.showRequest.targetId);
             if (requester && target) {
                 this.gameState.showRequest = {
-                    requester,
-                    target,
+                    requester, target,
                     isForceShow: gs.showRequest.isForceShow,
                     timestamp: gs.showRequest.timestamp
                 };
             }
         }
 
-        // Add recovery log
-        this.gameState.currentLogs.push('⚠️ Session recovered from server restart. Hands were reset for security.');
-        this.gameState.currentLogs.push('You may continue the current round or start a new one.');
+        this.gameState.currentLogs.push('⚠️ Session recovered from server restart. Start a new round to deal fresh cards.');
 
         this.clearRequestTimeouts();
         return true;

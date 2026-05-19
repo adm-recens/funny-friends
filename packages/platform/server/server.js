@@ -2165,7 +2165,11 @@ async function initializeGameManager(sessionName) {
               data: {
                 winner: summary.winner?.name || 'N/A',
                 potSize: summary.pot,
-                logs: JSON.stringify(summary.logs || []),
+                logs: JSON.stringify({
+                  round: summary.currentRound,
+                  netChanges: summary.netChanges,
+                  standings: summary.playerStandings
+                }),
                 sessionId: session.id
               }
             });
@@ -2180,9 +2184,10 @@ async function initializeGameManager(sessionName) {
               }
             }
 
+            // Update current round to the NEXT round for DB tracking
             await tx.gameSession.update({
               where: { id: session.id },
-              data: { currentRound: summary.currentRound }
+              data: { currentRound: summary.currentRound + 1 }
             });
           });
         } catch (e) {
@@ -2191,7 +2196,6 @@ async function initializeGameManager(sessionName) {
         
         io.to(sessionName).emit('game_update', { type: 'HAND_COMPLETE', ...summary });
         
-        // Clear snapshot since hand is complete
         clearSnapshot(sessionName).catch(err => {
           console.error(`[ERROR] Snapshot clear failed for ${sessionName}:`, err.message);
         });
@@ -2208,7 +2212,11 @@ async function initializeGameManager(sessionName) {
               data: {
                 winner: summary.winner?.name || 'N/A',
                 potSize: 0,
-                logs: JSON.stringify(summary.leaderboard || []),
+                logs: JSON.stringify({
+                  round: summary.round,
+                  leaderboard: summary.leaderboard,
+                  eliminated: summary.eliminated
+                }),
                 sessionId: session.id
               }
             });
@@ -2229,7 +2237,7 @@ async function initializeGameManager(sessionName) {
 
             await tx.gameSession.update({
               where: { id: session.id },
-              data: { currentRound: summary.round }
+              data: { currentRound: summary.round + 1 }
             });
           });
         } catch (e) {
@@ -2238,7 +2246,6 @@ async function initializeGameManager(sessionName) {
         
         io.to(sessionName).emit('game_update', { type: 'ROUND_COMPLETE', ...summary });
         
-        // Clear snapshot since round is complete
         clearSnapshot(sessionName).catch(err => {
           console.error(`[ERROR] Snapshot clear failed for ${sessionName}:`, err.message);
         });
@@ -2785,7 +2792,7 @@ async function initializeDatabase() {
     
     // Check if schema is up to date (new columns exist)
     try {
-      await prisma.gameSession.findFirst({ select: { snapshot: true, lastActivityAt: true } });
+      await prisma.gameSession.findFirst({ select: { snapshot: true, lastActivityAt: true, roundHistory: true } });
       console.log('[INFO] Database schema is up to date');
     } catch (schemaError) {
       if (schemaError.code === 'P2022' || schemaError.code === 'P2021') {

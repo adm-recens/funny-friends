@@ -54,6 +54,7 @@ model GameSession {
   isPublic    Boolean    @default(false) // Can viewers join without invitation?
   status      String     @default("waiting") // waiting, playing, paused, completed
   snapshot    Json?      // Serialized active game state for crash recovery
+  roundHistory Json?     // Round-by-round results for post-game analysis
   lastActivityAt DateTime @default(now()) // For stale session detection
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
