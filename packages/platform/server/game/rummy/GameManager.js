@@ -271,6 +271,7 @@ class RummyLedger extends EventEmitter {
                 name: p.name,
                 roundScore: p.roundScore,
                 totalScore: p.score,
+                score: p.score,
                 status: p.status
             }))
             .sort((a, b) => a.totalScore - b.totalScore);
@@ -393,6 +394,9 @@ class RummyLedger extends EventEmitter {
                 id: p.id,
                 name: p.name,
                 finalScore: p.score,
+                score: p.score,
+                totalScore: p.score,
+                sessionBalance: p.score,
                 status: p.status
             }))
             .sort((a, b) => a.finalScore - b.finalScore);
