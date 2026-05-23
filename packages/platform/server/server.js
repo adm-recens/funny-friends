@@ -1384,9 +1384,9 @@ app.post('/api/games/hand', requireAuth, async (req, res) => {
       });
     }
 
-    // Get current round from session - GameManager handles round increment
-    const currentRound = session.currentRound;
-    const isSessionOver = currentRound >= session.totalRounds;
+      // Get current round from session - GameManager handles round increment
+      const currentRound = session.currentRound;
+      const isSessionOver = currentRound >= session.totalRounds;
 
     if (isSessionOver) {
       await prisma.gameSession.update({
@@ -1595,18 +1595,18 @@ app.post('/api/admin/sessions/:name/end', requireOperator, async (req, res) => {
       return res.status(403).json({ error: "Access denied. You can only end your own sessions." });
     }
 
-    await prisma.gameSession.update({
-      where: { id: session.id },
-      data: { isActive: false }
-    });
-
-    if (activeSessions.has(name)) {
+    const manager = activeSessions.get(name);
+    if (manager) {
+      manager.endSession();
+    } else {
+      await prisma.gameSession.update({
+        where: { id: session.id },
+        data: { isActive: false }
+      });
       activeSessions.delete(name);
+      clearSnapshot(name).catch(() => {});
+      io.to(name).emit('session_ended', { reason: 'ADMIN_ENDED' });
     }
-    
-    clearSnapshot(name).catch(() => {});
-
-    io.to(name).emit('session_ended', { reason: 'ADMIN_ENDED' });
 
     res.json({ success: true });
   } catch (e) {
@@ -2043,15 +2043,7 @@ app.post('/api/sessions', requireAuth, asyncHandler(async (req, res) => {
           });
         }
       }
-      // Auto-initialize GameManager before responding
-      // This ensures the game is ready immediately without waiting for operator to join via socket
-      try {
-        await initializeGameManager(session.name);
-        console.log(`[DEBUG] Auto-initialized GameManager for session: ${session.name}`);
-      } catch (error) {
-        console.error(`[ERROR] Failed to auto-initialize GameManager for ${session.name}:`, error);
-        // Don't fail the request - game can still be initialized lazily when operator joins
-      }
+       // GameManager will be initialized when operator joins via socket
     }
   }
 
@@ -2499,43 +2491,34 @@ io.on('connection', (socket) => {
         data: { isActive: false }
       });
 
-      // Get final round info from manager if available
       const manager = activeSessions.get(sessionName);
-      let finalRound = session.currentRound;
-      let totalRounds = session.totalRounds;
-      let finalPlayers = [];
 
       if (manager) {
-        finalRound = manager.currentRound;
-        totalRounds = manager.totalRounds;
-        // Get players from manager
-        const state = manager.getPublicState();
-        finalPlayers = state.players || state.gamePlayers || [];
-        // Call endSession if available (for proper cleanup)
-        if (manager.endSession) {
-          manager.endSession();
-        }
-        activeSessions.delete(sessionName);
-        clearSnapshot(sessionName).catch(() => {});
+        // Manager exists — let it handle everything (DB update, socket emit, cleanup)
+        manager.endSession();
       } else {
-        // Fetch players from database if manager not in memory
+        // No manager in memory — do it all here
         const dbPlayers = await prisma.player.findMany({ where: { sessionId: session.id } });
-        finalPlayers = dbPlayers.map(p => ({
+        const finalPlayers = dbPlayers.map(p => ({
           id: p.id,
           name: p.name,
           sessionBalance: p.sessionBalance,
           score: p.score,
           status: p.status
         }));
-      }
+        const overallWinner = finalPlayers.length > 0
+          ? [...finalPlayers].sort((a, b) => (b.sessionBalance || 0) - (a.sessionBalance || 0))[0]
+          : null;
 
-      // Notify all clients
-      io.to(sessionName).emit('session_ended', {
-        reason: 'OPERATOR_ENDED',
-        finalRound,
-        totalRounds,
-        finalPlayers
-      });
+        io.to(sessionName).emit('session_ended', {
+          reason: 'OPERATOR_ENDED',
+          finalRound: session.currentRound,
+          totalRounds: session.totalRounds,
+          finalPlayers,
+          overallWinner,
+          roundHistory: []
+        });
+      }
 
       // Confirm to operator
       socket.emit('session_ended_confirm', { success: true, message: 'Session ended successfully' });

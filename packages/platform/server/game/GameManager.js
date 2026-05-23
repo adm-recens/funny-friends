@@ -212,7 +212,8 @@ class GameManager extends EventEmitter {
                 finalRound: this.currentRound - 1,
                 totalRounds: this.totalRounds,
                 overallWinner: this.overallWinner,
-                roundHistory: this.roundHistory
+                roundHistory: this.roundHistory,
+                players: this.gameState.players
             });
             return { success: false, error: "All rounds completed" };
         }

@@ -140,7 +140,9 @@ const GameSession = () => {
           eliminated: state.eliminated,
           remainingPlayers: state.remainingPlayers
         });
-        setShowRoundSummary(true);
+        if (!state.isSessionOver) {
+          setShowRoundSummary(true);
+        }
         if (state.leaderboard) {
           setPlayers(state.leaderboard);
         }
