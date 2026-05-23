@@ -27,6 +27,7 @@ const GameSession = () => {
   
   const [showSideShowSelection, setShowSideShowSelection] = useState(false);
   const [showShowSelection, setShowShowSelection] = useState(false);
+  const [sideShowConfirm, setSideShowConfirm] = useState(null);
   const [sideShowRequest, setSideShowRequest] = useState(null);
   const [showRequest, setShowRequest] = useState(null);
   const [roundSummaryData, setRoundSummaryData] = useState(null);
@@ -1059,15 +1060,38 @@ const GameSession = () => {
               <h3 className="text-2xl font-black text-slate-50">Side Show</h3>
             </div>
             <div className="space-y-4 mb-6">
-              <button onClick={() => sendGameAction('SIDE_SHOW_RESOLVE', { winnerId: sideShowRequest.requester.id })} className="w-full p-4 rounded-xl border-2 border-blue-500/30 bg-blue-900/20">
+              <button onClick={() => setSideShowConfirm({ player: sideShowRequest.requester, role: 'Requester' })} className="w-full p-4 rounded-xl border-2 border-blue-500/30 bg-blue-900/20">
                 <div className="flex justify-between"><span className="font-bold text-slate-50">{sideShowRequest.requester.name}</span><span className="text-xs bg-blue-500/30 text-blue-300 px-2 py-1 rounded">Requester</span></div>
               </button>
               <div className="text-center text-slate-400 font-bold">VS</div>
-              <button onClick={() => sendGameAction('SIDE_SHOW_RESOLVE', { winnerId: sideShowRequest.target.id })} className="w-full p-4 rounded-xl border-2 border-purple-500/30 bg-purple-900/20">
+              <button onClick={() => setSideShowConfirm({ player: sideShowRequest.target, role: 'Target' })} className="w-full p-4 rounded-xl border-2 border-purple-500/30 bg-purple-900/20">
                 <div className="flex justify-between"><span className="font-bold text-slate-50">{sideShowRequest.target.name}</span><span className="text-xs bg-purple-500/30 text-purple-300 px-2 py-1 rounded">Target</span></div>
               </button>
             </div>
             <button onClick={() => sendGameAction('CANCEL_SIDE_SHOW')} className="w-full py-3 bg-slate-700 text-slate-300 rounded-xl font-bold flex items-center justify-center gap-2"><X size={18} /> Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Teen Patti: Side Show Confirm */}
+      {sideShowConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-slate-800 p-6 rounded-2xl max-w-sm w-full border border-slate-700">
+            <div className="text-center mb-4">
+              <ShieldAlert className="mx-auto text-yellow-400 mb-2" size={40} />
+              <h3 className="text-xl font-bold text-slate-50">Confirm Winner</h3>
+              <p className="text-slate-400 text-sm mt-2">
+                Are you sure <span className="font-bold text-yellow-400">{sideShowConfirm.player.name}</span> is the winner? Verify both players' cards carefully before confirming.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setSideShowConfirm(null)} className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-xl font-bold">
+                Re-check
+              </button>
+              <button onClick={() => { sendGameAction('SIDE_SHOW_RESOLVE', { winnerId: sideShowConfirm.player.id }); setSideShowConfirm(null); }} className="flex-1 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl font-bold flex items-center justify-center gap-2">
+                <Check size={18} /> Confirm
+              </button>
+            </div>
           </div>
         </div>
       )}
